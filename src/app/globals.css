@@ -69,3 +69,19 @@ body {
 .badge-error {
   @apply bg-red-100 text-red-800;
 }
+
+@media print {
+  header, nav, .print\:hidden {
+    display: none !important;
+  }
+  main {
+    padding-bottom: 0 !important;
+  }
+  body {
+    background: white !important;
+  }
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+  }
+}

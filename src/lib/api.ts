@@ -155,6 +155,53 @@ export async function registrarVentaDiaria(venta: {
   }
 }
 
+export async function updateCajaDiaria(venta: {
+  fecha: string
+  ventaBoleta: number
+  ventaSinBoleta: number
+  consumoPropio: number
+}): Promise<{ success: boolean; message: string }> {
+  try {
+    const response = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'updateCajaDiaria',
+        ...venta,
+      }),
+    })
+    const data = await response.json()
+    return {
+      success: data.success ?? true,
+      message: data.message ?? 'Venta actualizada correctamente',
+    }
+  } catch (error) {
+    console.error('Error actualizando venta:', error)
+    return { success: false, message: 'Error al actualizar la venta' }
+  }
+}
+
+export async function deleteCajaDiaria(fecha: string): Promise<{ success: boolean; message: string }> {
+  try {
+    const response = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'deleteCajaDiaria',
+        fecha,
+      }),
+    })
+    const data = await response.json()
+    return {
+      success: data.success ?? true,
+      message: data.message ?? 'Venta eliminada correctamente',
+    }
+  } catch (error) {
+    console.error('Error eliminando venta:', error)
+    return { success: false, message: 'Error al eliminar la venta' }
+  }
+}
+
 export async function fetchPanelPapa(): Promise<PanelPapa | null> {
   try {
     const response = await fetch(`${SCRIPT_URL}?action=getPanelPapa`, {

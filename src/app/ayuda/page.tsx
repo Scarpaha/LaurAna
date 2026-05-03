@@ -1,15 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import {
-  ChevronDown,
-  ChevronUp,
-  ShoppingCart,
-  Calculator,
-  Package,
-  FileText,
-  AlertTriangle,
-} from 'lucide-react'
+import { ChevronDown, ChevronUp, ShoppingCart, Calculator, Package, FileText, AlertTriangle } from 'lucide-react'
 
 interface AccordionItem {
   title: string
@@ -21,12 +13,8 @@ export default function AyudaPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
       <div className="text-center">
-        <h1 className="font-logo text-5xl text-rosa-intenso mb-2">
-          Manual de Ayuda
-        </h1>
-        <p className="font-slogan text-lavanda text-lg">
-          Cómo usar cada parte de la app
-        </p>
+        <h1 className="font-logo text-5xl text-rosa-intenso mb-2">Manual de Ayuda</h1>
+        <p className="font-slogan text-lavanda text-lg">Cómo usar cada parte de la app</p>
       </div>
 
       <div className="space-y-8">
@@ -37,7 +25,6 @@ export default function AyudaPage() {
           </h2>
           <Accordion items={seniorItems} />
         </div>
-
         <div>
           <h2 className="text-2xl font-bold text-rosa-intenso mb-4 flex items-center gap-2">
             <Package className="w-6 h-6" />
@@ -45,7 +32,6 @@ export default function AyudaPage() {
           </h2>
           <Accordion items={adminItems} />
         </div>
-
         <div>
           <h2 className="text-2xl font-bold text-rosa-intenso mb-4 flex items-center gap-2">
             <AlertTriangle className="w-6 h-6" />
@@ -60,24 +46,16 @@ export default function AyudaPage() {
 
 function Accordion({ items }: { items: AccordionItem[] }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
-
   return (
     <div className="space-y-3">
       {items.map((item, index) => (
         <div key={index} className="card overflow-hidden">
-          <button
-            onClick={() => setOpenIndex(openIndex === index ? null : index)}
-            className="w-full flex items-center justify-between gap-3 text-left"
-          >
+          <button onClick={() => setOpenIndex(openIndex === index ? null : index)} className="w-full flex items-center justify-between gap-3 text-left">
             <div className="flex items-center gap-3">
               {item.icon}
               <span className="font-bold text-lg">{item.title}</span>
             </div>
-            {openIndex === index ? (
-              <ChevronUp className="w-5 h-5 text-gray-400" />
-            ) : (
-              <ChevronDown className="w-5 h-5 text-gray-400" />
-            )}
+            {openIndex === index ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
           </button>
           {openIndex === index && (
             <div className="mt-4 pt-4 border-t border-gray-200 space-y-3 text-gray-700">
@@ -96,27 +74,14 @@ const seniorItems: AccordionItem[] = [
     icon: <ShoppingCart className="w-6 h-6 text-rosa-intenso" />,
     content: (
       <>
-        <p>
-          Es tu cuaderno de ventas pero en la pantalla. Reemplaza el cuaderno
-          físico donde anotabas cada día.
-        </p>
-        <p>
-          Lo que ves arriba son 3 números importantes:
-        </p>
+        <p>Es tu cuaderno de ventas pero en la pantalla. Reemplaza el cuaderno físico.</p>
+        <p>Arriba ves 3 números importantes:</p>
         <ul className="list-disc list-inside space-y-1">
-          <li>
-            <strong>Inversión Total:</strong> cuánto compraste en facturas este mes
-          </li>
-          <li>
-            <strong>Meta de Venta:</strong> cuánto debes vender (compra + 20%)
-          </li>
-          <li>
-            <strong>Venta Real:</strong> cuánto has vendido hasta ahora
-          </li>
+          <li><strong>Inversión Total:</strong> cuánto compraste en facturas este mes</li>
+          <li><strong>Meta de Venta:</strong> cuánto debes vender (compra + 20%)</li>
+          <li><strong>Venta Real:</strong> cuánto has vendido hasta ahora</li>
         </ul>
-        <p className="text-exito font-semibold">
-          Si la barra llega a 100%, ¡ya cumpliste la meta del mes!
-        </p>
+        <p className="text-exito font-semibold">Si la barra llega a 100%, ¡ya cumpliste la meta!</p>
       </>
     ),
   },
@@ -125,47 +90,37 @@ const seniorItems: AccordionItem[] = [
     icon: <Calculator className="w-6 h-6 text-exito" />,
     content: (
       <>
-        <p>Es muy simple, solo usa los botones con números:</p>
         <ol className="list-decimal list-inside space-y-2">
-          <li>
-            Toca donde dice <strong>&quot;Venta con Boleta&quot;</strong> y usa el teclado numérico grande para poner el monto.
-          </li>
-          <li>
-            Lo mismo para <strong>&quot;Venta sin Boleta&quot;</strong> (las ventas que no sacaron boleta).
-          </li>
-          <li>
-            Lo mismo para <strong>&quot;Consumo Propio&quot;</strong> (lo que se llevó para la casa).
-          </li>
-          <li>
-            El <strong>&quot;Total del Día&quot;</strong> se calcula solo (suma los tres).
-          </li>
-          <li>
-            Presiona <strong>&quot;Guardar Venta del Día&quot;</strong>.
-          </li>
+          <li>Elige el tipo de venta: <strong>Venta con Boleta</strong>, <strong>Venta sin Boleta</strong> o <strong>Consumo Propio</strong>.</li>
+          <li>Usa el <strong>teclado numérico</strong> grande para escribir el monto.</li>
+          <li>Presiona <strong>&quot;Agregar al Día&quot;</strong>.</li>
         </ol>
-        <p className="text-sm text-gray-500">
-          El botón con flecha hacia atrás (⌫) borra el último número.
-        </p>
+        <p>El sistema suma automáticamente al total del día y del mes. Si te equivocaste, puedes <strong>editar</strong> o <strong>eliminar</strong> cualquier día en la tabla de abajo.</p>
+        <p className="text-sm text-gray-500">El botón ⌫ borra el último número. El botón &quot;Limpiar&quot; borra todo.</p>
       </>
     ),
   },
   {
-    title: '¿Qué es la tabla de abajo?',
-    icon: <ShoppingCart className="w-6 h-6 text-lavanda" />,
+    title: 'Editar y Eliminar ventas',
+    icon: <Calculator className="w-6 h-6 text-lavanda" />,
     content: (
       <>
-        <p>
-          Es el historial de todos los días que has guardado. Muestra:
-        </p>
+        <p>En la tabla de historial, cada día tiene dos botones:</p>
         <ul className="list-disc list-inside space-y-1">
-          <li><strong>Fecha:</strong> el día que registraste</li>
-          <li><strong>Con Boleta:</strong> ventas con boleta</li>
-          <li><strong>Sin Boleta:</strong> ventas sin boleta</li>
-          <li><strong>Consumo:</strong> lo que se llevó para la casa</li>
-          <li><strong>Total Día:</strong> la suma de todo</li>
-          <li><strong>Total Semana:</strong> cuánto se acumuló esa semana</li>
-          <li><strong>Total Mes:</strong> cuánto se acumuló ese mes</li>
+          <li><strong>Lápiz (Editar):</strong> Cambia los montos de ese día directamente.</li>
+          <li><strong>Basurero (Eliminar):</strong> Borra completamente ese día (pide confirmación).</li>
         </ul>
+        <p className="text-sm text-gray-500">Si agregaste algo dos veces, solo edita el día y corrige el número.</p>
+      </>
+    ),
+  },
+  {
+    title: 'Imprimir el mes',
+    icon: <Package className="w-6 h-6 text-lavanda" />,
+    content: (
+      <>
+        <p>Presiona el botón <strong>&quot;Imprimir Mes&quot;</strong> arriba de la tabla.</p>
+        <p>Se abrirá la ventana de impresión con un resumen limpio de todo el mes, listo para imprimir o guardar como PDF.</p>
       </>
     ),
   },
@@ -177,73 +132,32 @@ const adminItems: AccordionItem[] = [
     icon: <Package className="w-6 h-6 text-rosa-intenso" />,
     content: (
       <>
-        <p>Usa esto cuando llegue un producto solo o pocos productos:</p>
         <ol className="list-decimal list-inside space-y-2">
-          <li>
-            Elige el <strong>Tipo</strong> (Lácteos, Carnes, Embutidos, etc.).
-          </li>
-          <li>
-            Escribe el <strong>Nombre</strong> (Ej: &quot;Vienesa Frankfurt&quot;).
-          </li>
-          <li>
-            Opcional: agrega un <strong>Detalle</strong> (Ej: &quot;Marca Super, Pack x10&quot;).
-          </li>
-          <li>
-            Pon la <strong>Cantidad</strong> de unidades.
-          </li>
-          <li>
-            Ingresa el <strong>Costo Neto Unitario</strong> (precio sin IVA de cada unidad). El sistema calcula el IVA y total automáticamente.
-          </li>
-          <li>
-            Para el <strong>vencimiento</strong> elige:
-            <ul className="list-disc list-inside ml-4 mt-1">
-              <li>
-                <strong>Tiene fecha:</strong> pon la fecha directamente.
-              </li>
-              <li>
-                <strong>No tiene fecha:</strong> pon la fecha de elaboración y cuántos meses dura. El sistema calcula automáticamente.
-              </li>
-            </ul>
-          </li>
-          <li>
-            Presiona <strong>&quot;Registrar Producto&quot;</strong>.
-          </li>
+          <li>Elige el <strong>Tipo</strong> (Lácteos, Carnes, etc.).</li>
+          <li>Escribe el <strong>Nombre</strong>.</li>
+          <li>Agrega un <strong>Detalle</strong> si quieres (marca, pack, etc.).</li>
+          <li>Pon la <strong>Cantidad</strong>.</li>
+          <li>Elige si ingresas <strong>Valor Neto</strong> o <strong>Valor Total</strong> (con IVA). El sistema calcula el resto automáticamente.</li>
+          <li>Para el vencimiento: si tiene fecha, ponla. Si no, pon fecha de elaboración + meses.</li>
+          <li>Presiona <strong>&quot;Registrar Producto&quot;</strong>.</li>
         </ol>
       </>
     ),
   },
   {
-    title: 'Ingreso por Factura (varios productos juntos)',
+    title: 'Ingreso por Factura (varios productos)',
     icon: <FileText className="w-6 h-6 text-lavanda" />,
     content: (
       <>
-        <p>
-          Usa esto cuando llega un proveedor con muchos productos distintos
-          (Ej: vienesas, quesos, pâté, todo en la misma factura).
-        </p>
+        <p>Para cuando llega un proveedor con muchos productos distintos.</p>
         <ol className="list-decimal list-inside space-y-2">
-          <li>
-            Elige si todos los productos tienen la <strong>misma fecha de vencimiento</strong> o si <strong>cada uno tiene la suya</strong>.
-          </li>
-          <li>
-            Si es la misma fecha, ponla una sola vez arriba.
-          </li>
-          <li>
-            Llena cada producto: <strong>Tipo, Nombre, Detalle, Cantidad, Costo Neto</strong>.
-          </li>
-          <li>
-            Si cada uno tiene vencimiento distinto, elige &quot;Cada uno distinto&quot; y pon la fecha de cada producto.
-          </li>
-          <li>
-            Para agregar otro producto, toca <strong>&quot;Agregar otro producto&quot;</strong>.
-          </li>
-          <li>
-            El total de la factura se calcula solo. Presiona <strong>&quot;Registrar Todos los Productos&quot;</strong>.
-          </li>
+          <li>Elige si todos vencen en la <strong>misma fecha</strong> o <strong>distinta</strong>.</li>
+          <li>Llena cada producto (Tipo, Nombre, Cantidad, Precio).</li>
+          <li>Cada producto puede tener precio Neto o Total, se elige por producto.</li>
+          <li>Dale a <strong>&quot;Agregar otro producto&quot;</strong> para añadir más.</li>
+          <li>El total se calcula solo. Presiona <strong>&quot;Registrar Todos&quot;</strong>.</li>
+          <li>Puedes imprimir la factura con el botón <strong>Imprimir</strong>.</li>
         </ol>
-        <p className="text-sm text-gray-500">
-          Cada producto se guarda como un lote separado, así pueden vencer en fechas distintas.
-        </p>
       </>
     ),
   },
@@ -251,16 +165,11 @@ const adminItems: AccordionItem[] = [
 
 const vencimientoItems: AccordionItem[] = [
   {
-    title: '¿Cómo funciona la página de Vencimientos?',
+    title: '¿Cómo funciona Vencimientos?',
     icon: <AlertTriangle className="w-6 h-6 text-error" />,
     content: (
       <>
-        <p>
-          Esta página te muestra todos los productos que tienen fecha de vencimiento, ordenados desde el que vence más pronto.
-        </p>
-        <p>
-          Hay 3 colores que te dicen qué tan urgente es:
-        </p>
+        <p>Muestra todos los productos con fecha de vencimiento, ordenados del que vence más pronto.</p>
         <div className="space-y-2">
           <div className="p-3 bg-red-50 rounded-xl border border-error">
             <p className="font-bold text-error">Rojo (Crítico)</p>
@@ -275,12 +184,7 @@ const vencimientoItems: AccordionItem[] = [
             <p>Vence en más de 15 días. Todo bien.</p>
           </div>
         </div>
-        <p>
-          Los números grandes de arriba te muestran cuántos hay en cada categoría. Puedes tocar cada uno para filtrar.
-        </p>
-        <p>
-          Cada tarjeta muestra: nombre del producto, tipo, cantidad, fecha de vencimiento y cuántos días quedan.
-        </p>
+        <p>Toca los números de arriba para filtrar. Cada tarjeta muestra: nombre, tipo, cantidad, fecha y días restantes.</p>
       </>
     ),
   },

@@ -5,116 +5,151 @@ import {
   fetchCajaDiaria,
   fetchPanelPapa,
   registrarVentaDiaria,
+  updateCajaDiaria,
+  deleteCajaDiaria,
   type VentaDiaria,
   type PanelPapa,
 } from '@/lib/api'
-import {
-  Target,
-  DollarSign,
-  TrendingUp,
-  CheckCircle,
-  AlertTriangle,
-  Loader2,
-  Calendar,
-} from 'lucide-react'
+import { Target, DollarSign, TrendingUp, Loader2, Calendar, Printer, Edit2, Trash2, Check, X } from 'lucide-react'
+
+type Mode = 'boleta' | 'sinboleta' | 'consumo'
 
 export default function VentasPage() {
   const [panel, setPanel] = useState<PanelPapa | null>(null)
   const [ventas, setVentas] = useState<VentaDiaria[]>([])
   const [loading, setLoading] = useState(true)
+  const today = new Date().toISOString().slice(0, 10)
 
-  const [form, setForm] = useState({
-    fecha: new Date().toISOString().split('T')[0],
-    ventaBoleta: '',
-    ventaSinBoleta: '',
-    consumoPropio: '',
-  })
-  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
-  const [message, setMessage] = useState('')
+  const [mode, setMode] = useState<Mode>('boleta')
+  const [input, setInput] = useState('')
+  const [toast, setToast] = useState<string | null>(null)
+  const [editingDate, setEditingDate] = useState<string | null>(null)
+  const [editValues, setEditValues] = useState({ ventaBoleta: 0, ventaSinBoleta: 0, consumoPropio: 0 })
+
+  const [printMode, setPrintMode] = useState(false)
 
   useEffect(() => {
     const load = async () => {
       setLoading(true)
-      const [panelData, ventasData] = await Promise.all([
-        fetchPanelPapa(),
-        fetchCajaDiaria(),
-      ])
-      setPanel(panelData)
-      setVentas(ventasData)
+      const [p, v] = await Promise.all([fetchPanelPapa(), fetchCajaDiaria()])
+      setPanel(p)
+      setVentas(v)
       setLoading(false)
     }
     load()
   }, [])
 
-  const handleNumpad = (field: 'ventaBoleta' | 'ventaSinBoleta' | 'consumoPropio', digit: string) => {
-    setForm((prev) => {
-      if (digit === 'backspace') {
-        return { ...prev, [field]: prev[field].slice(0, -1) }
-      }
-      if (digit === 'clear') {
-        return { ...prev, [field]: '' }
-      }
-      return { ...prev, [field]: prev[field] + digit }
-    })
+  const showToast = (msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2500)
   }
 
-  const totalDia =
-    Number(form.ventaBoleta || 0) +
-    Number(form.ventaSinBoleta || 0) +
-    Number(form.consumoPropio || 0)
+  const handleKey = (d: string) => {
+    if (d === '⌫') setInput((prev) => prev.slice(0, -1))
+    else if (d === 'C') setInput('')
+    else setInput((prev) => prev + d)
+  }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!form.fecha) return
+  const handleAdd = async () => {
+    const amount = Number(input)
+    if (!amount || amount <= 0) return
 
-    const result = await registrarVentaDiaria({
-      fecha: form.fecha,
-      ventaBoleta: Number(form.ventaBoleta || 0),
-      ventaSinBoleta: Number(form.ventaSinBoleta || 0),
-      consumoPropio: Number(form.consumoPropio || 0),
-    })
+    const existing = ventas.find((v) => v.fecha === today)
+    let payload: { fecha: string; ventaBoleta: number; ventaSinBoleta: number; consumoPropio: number }
 
-    setStatus(result.success ? 'success' : 'error')
-    setMessage(result.message)
+    if (existing) {
+      payload = {
+        fecha: today,
+        ventaBoleta:
+          mode === 'boleta' ? existing.ventaBoleta + amount : existing.ventaBoleta,
+        ventaSinBoleta:
+          mode === 'sinboleta' ? existing.ventaSinBoleta + amount : existing.ventaSinBoleta,
+        consumoPropio:
+          mode === 'consumo' ? existing.consumoPropio + amount : existing.consumoPropio,
+      }
+    } else {
+      payload = {
+        fecha: today,
+        ventaBoleta: mode === 'boleta' ? amount : 0,
+        ventaSinBoleta: mode === 'sinboleta' ? amount : 0,
+        consumoPropio: mode === 'consumo' ? amount : 0,
+      }
+    }
 
+    const result = await registrarVentaDiaria(payload)
     if (result.success) {
-      setForm({
-        fecha: form.fecha,
-        ventaBoleta: '',
-        ventaSinBoleta: '',
-        consumoPropio: '',
-      })
-      const ventasData = await fetchCajaDiaria()
-      setVentas(ventasData)
-      const panelData = await fetchPanelPapa()
-      setPanel(panelData)
-      setTimeout(() => setStatus('idle'), 3000)
+      showToast('Producto agregado correctamente ✔')
+      setInput('')
+      const v = await fetchCajaDiaria()
+      setVentas(v)
+      const p = await fetchPanelPapa()
+      setPanel(p)
+    } else {
+      showToast(result.message)
     }
   }
 
-  const weekTotal = (dateStr: string) => {
-    const date = new Date(dateStr)
-    const startOfWeek = new Date(date)
-    startOfWeek.setDate(date.getDate() - date.getDay())
-    startOfWeek.setHours(0, 0, 0, 0)
-
-    return ventas
-      .filter((v) => {
-        const vd = new Date(v.fecha)
-        return vd >= startOfWeek && vd <= date
-      })
-      .reduce((sum, v) => sum + v.totalDia, 0)
+  const startEdit = (v: VentaDiaria) => {
+    setEditingDate(v.fecha)
+    setEditValues({
+      ventaBoleta: v.ventaBoleta,
+      ventaSinBoleta: v.ventaSinBoleta,
+      consumoPropio: v.consumoPropio,
+    })
   }
 
-  const monthTotal = (dateStr: string) => {
-    const date = new Date(dateStr)
-    return ventas
-      .filter((v) => {
-        const vd = new Date(v.fecha)
-        return vd.getMonth() === date.getMonth() && vd.getFullYear() === date.getFullYear()
-      })
-      .reduce((sum, v) => sum + v.totalDia, 0)
+  const cancelEdit = () => {
+    setEditingDate(null)
   }
+
+  const saveEdit = async () => {
+    if (!editingDate) return
+    const result = await updateCajaDiaria({
+      fecha: editingDate,
+      ...editValues,
+    })
+    if (result.success) {
+      showToast('Venta actualizada correctamente ✔')
+      setEditingDate(null)
+      const v = await fetchCajaDiaria()
+      setVentas(v)
+      const p = await fetchPanelPapa()
+      setPanel(p)
+    } else {
+      showToast(result.message)
+    }
+  }
+
+  const handleDelete = async (fecha: string) => {
+    if (!confirm(`¿Eliminar la venta del ${fecha}?`)) return
+    const result = await deleteCajaDiaria(fecha)
+    if (result.success) {
+      showToast('Venta eliminada correctamente ✔')
+      const v = await fetchCajaDiaria()
+      setVentas(v)
+      const p = await fetchPanelPapa()
+      setPanel(p)
+    } else {
+      showToast(result.message)
+    }
+  }
+
+  const handlePrint = () => {
+    setPrintMode(true)
+    setTimeout(() => {
+      window.print()
+      setPrintMode(false)
+    }, 100)
+  }
+
+  const totalMes = ventas
+    .filter((v) => v.fecha.startsWith(today.substring(0, 7)))
+    .reduce((sum, v) => sum + v.ventaBoleta + v.ventaSinBoleta + v.consumoPropio, 0)
+
+  const todayVenta = ventas.find((v) => v.fecha === today)
+  const totalDia = todayVenta
+    ? todayVenta.ventaBoleta + todayVenta.ventaSinBoleta + todayVenta.consumoPropio
+    : 0
 
   const progressPercent =
     panel && panel.metaVenta > 0
@@ -130,202 +165,202 @@ export default function VentasPage() {
     )
   }
 
+  if (printMode) {
+    return (
+      <div className="p-8">
+        <h1 className="text-3xl font-bold mb-4">Resumen Mensual - {panel?.mesActual || today.substring(0, 7)}</h1>
+        <table className="w-full border-collapse border border-gray-300 text-sm">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="border p-2">Fecha</th>
+              <th className="border p-2">Con Boleta</th>
+              <th className="border p-2">Sin Boleta</th>
+              <th className="border p-2">Consumo</th>
+              <th className="border p-2">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ventas
+              .filter((v) => v.fecha.startsWith(today.substring(0, 7)))
+              .sort((a, b) => a.fecha.localeCompare(b.fecha))
+              .map((v) => (
+                <tr key={v.fecha}>
+                  <td className="border p-2">{v.fecha}</td>
+                  <td className="border p-2">${v.ventaBoleta.toLocaleString('es-CL')}</td>
+                  <td className="border p-2">${v.ventaSinBoleta.toLocaleString('es-CL')}</td>
+                  <td className="border p-2">${v.consumoPropio.toLocaleString('es-CL')}</td>
+                  <td className="border p-2 font-bold">${(v.ventaBoleta + v.ventaSinBoleta + v.consumoPropio).toLocaleString('es-CL')}</td>
+                </tr>
+              ))}
+            <tr className="font-bold bg-gray-100">
+              <td className="border p-2" colSpan={4}>TOTAL MES</td>
+              <td className="border p-2">${totalMes.toLocaleString('es-CL')}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-      <div className="text-center">
-        <h1 className="font-logo text-5xl text-rosa-intenso mb-2">
-          Ventas Diarias
-        </h1>
-        <p className="font-slogan text-lavanda text-lg">
-          El cuaderno digital
-        </p>
+    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6 print:p-0">
+      <div className="text-center print:hidden">
+        <h1 className="font-logo text-5xl text-rosa-intenso mb-2">Ventas Diarias</h1>
+        <p className="font-slogan text-lavanda text-lg">El cuaderno digital</p>
       </div>
 
       {panel && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="card border-l-4 border-lavanda">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-lavanda/20 rounded-xl">
-                  <DollarSign className="w-7 h-7 text-lavanda" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 font-semibold">
-                    Inversión Total
-                  </p>
-                  <p className="text-2xl font-extrabold text-carbon">
-                    ${panel.inversionTotal.toLocaleString('es-CL')}
-                  </p>
-                </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:grid-cols-3">
+          <div className="card border-l-4 border-lavanda">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-lavanda/20 rounded-xl">
+                <DollarSign className="w-7 h-7 text-lavanda" />
               </div>
-            </div>
-
-            <div className="card border-l-4 border-aviso">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-yellow-100 rounded-xl">
-                  <Target className="w-7 h-7 text-yellow-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 font-semibold">
-                    Meta de Venta
-                  </p>
-                  <p className="text-2xl font-extrabold text-carbon">
-                    ${panel.metaVenta.toLocaleString('es-CL')}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="card border-l-4 border-exito">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-green-100 rounded-xl">
-                  <TrendingUp className="w-7 h-7 text-exito" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 font-semibold">
-                    Venta Real
-                  </p>
-                  <p className="text-2xl font-extrabold text-exito">
-                    ${panel.ventaReal.toLocaleString('es-CL')}
-                  </p>
-                </div>
+              <div>
+                <p className="text-sm text-gray-500 font-semibold">Inversión Total</p>
+                <p className="text-2xl font-extrabold text-carbon">
+                  ${panel.inversionTotal.toLocaleString('es-CL')}
+                </p>
               </div>
             </div>
           </div>
 
-          {panel.metaVenta > 0 && (
-            <div className="card">
-              <h3 className="font-bold text-lg mb-3">
-                Progreso del Mes - {panel.mesActual || 'Este mes'}
-              </h3>
-              <div className="w-full bg-gray-200 rounded-full h-8">
-                <div
-                  className={`h-8 rounded-full font-bold text-sm flex items-center justify-center transition-all duration-500 ${
-                    progressPercent >= 100
-                      ? 'bg-exito'
-                      : progressPercent >= 70
-                        ? 'bg-aviso text-carbon'
-                        : 'bg-rosa-intenso'
-                  }`}
-                  style={{ width: `${Math.max(progressPercent, 5)}%` }}
-                >
-                  {progressPercent.toFixed(0)}%
-                </div>
+          <div className="card border-l-4 border-aviso">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-yellow-100 rounded-xl">
+                <Target className="w-7 h-7 text-yellow-600" />
               </div>
-              <div className="grid grid-cols-2 gap-4 mt-3">
-                <div className="text-center p-3 bg-green-50 rounded-xl">
-                  <p className="text-sm text-gray-500">Utilidad</p>
-                  <p className="text-xl font-bold text-exito">
-                    ${panel.diferencia.toLocaleString('es-CL')}
-                  </p>
-                </div>
-                <div className="text-center p-3 bg-pink-50 rounded-xl">
-                  <p className="text-sm text-gray-500">Falta para meta</p>
-                  <p className="text-xl font-bold text-rosa-intenso">
-                    ${Math.max(0, panel.metaVenta - panel.ventaReal).toLocaleString('es-CL')}
-                  </p>
-                </div>
+              <div>
+                <p className="text-sm text-gray-500 font-semibold">Meta de Venta</p>
+                <p className="text-2xl font-extrabold text-carbon">
+                  ${panel.metaVenta.toLocaleString('es-CL')}
+                </p>
               </div>
             </div>
-          )}
-        </>
+          </div>
+
+          <div className="card border-l-4 border-exito">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-green-100 rounded-xl">
+                <TrendingUp className="w-7 h-7 text-exito" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-500 font-semibold">Venta Real</p>
+                <p className="text-2xl font-extrabold text-exito">
+                  ${panel.ventaReal.toLocaleString('es-CL')}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
-      <div className="card">
-        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-          <Calendar className="w-7 h-7 text-rosa-intenso" />
-          Registrar Venta del Día
-        </h2>
-
-        {status === 'success' && (
-          <div className="mb-4 p-4 bg-green-100 border border-exito rounded-xl flex items-center gap-2">
-            <CheckCircle className="w-6 h-6 text-exito" />
-            <span className="font-semibold text-green-800">{message}</span>
+      {panel && panel.metaVenta > 0 && (
+        <div className="card print:hidden">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-bold text-lg">
+              Progreso - {panel.mesActual || 'Este mes'}
+            </h3>
+            <span className="text-sm text-gray-500">
+              Debe vender: <span className="font-bold text-rosa-intenso">${panel.metaVenta.toLocaleString('es-CL')}</span> | Ha vendido: <span className="font-bold text-exito">${panel.ventaReal.toLocaleString('es-CL')}</span>
+            </span>
           </div>
-        )}
-
-        {status === 'error' && (
-          <div className="mb-4 p-4 bg-red-100 border border-error rounded-xl flex items-center gap-2">
-            <AlertTriangle className="w-6 h-6 text-error" />
-            <span className="font-semibold text-red-800">{message}</span>
+          <div className="w-full bg-gray-200 rounded-full h-8">
+            <div
+              className={`h-8 rounded-full font-bold text-sm flex items-center justify-center transition-all duration-500 ${
+                progressPercent >= 100 ? 'bg-exito' : progressPercent >= 70 ? 'bg-aviso text-carbon' : 'bg-rosa-intenso'
+              }`}
+              style={{ width: `${Math.max(progressPercent, 5)}%` }}
+            >
+              {progressPercent.toFixed(0)}%
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="label-field">Fecha</label>
-            <input
-              type="date"
-              value={form.fecha}
-              onChange={(e) => setForm((prev) => ({ ...prev, fecha: e.target.value }))}
-              className="input-field"
-              required
-            />
-          </div>
+      <div className="card print:hidden">
+        <div className="flex gap-2 mb-4">
+          {([
+            { key: 'boleta', label: 'Venta con Boleta' },
+            { key: 'sinboleta', label: 'Venta sin Boleta' },
+            { key: 'consumo', label: 'Consumo Propio' },
+          ] as const).map((m) => (
+            <button
+              key={m.key}
+              onClick={() => setMode(m.key)}
+              className={`flex-1 py-3 rounded-xl font-bold text-lg transition-all ${
+                mode === m.key
+                  ? 'bg-rosa-intenso text-white shadow-md'
+                  : 'bg-white border-2 border-lavanda hover:bg-lavanda/20'
+              }`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
 
-          {(['ventaBoleta', 'ventaSinBoleta', 'consumoPropio'] as const).map((field) => {
-            const labels = {
-              ventaBoleta: 'Venta con Boleta',
-              ventaSinBoleta: 'Venta sin Boleta',
-              consumoPropio: 'Consumo Propio',
-            }
-            return (
-              <div key={field} className="space-y-2">
-                <label className="label-field">{labels[field]}</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    readOnly
-                    value={form[field] ? `$${Number(form[field]).toLocaleString('es-CL')}` : '$0'}
-                    className="input-field text-right text-2xl font-mono bg-gray-50"
-                  />
-                </div>
+        <div className="text-center mb-4">
+          <p className="text-sm text-gray-500 mb-1">Monto a agregar</p>
+          <p className="text-4xl font-extrabold text-rosa-intenso font-mono">
+            ${input ? Number(input).toLocaleString('es-CL') : '0'}
+          </p>
+        </div>
 
-                <div className="grid grid-cols-3 gap-2 max-w-xs mx-auto">
-                  {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
-                    <button
-                      key={digit}
-                      type="button"
-                      onClick={() => handleNumpad(field, digit)}
-                      className="h-14 text-2xl font-bold bg-white border-2 border-lavanda rounded-xl hover:bg-lavanda/30 active:bg-lavanda transition-colors"
-                    >
-                      {digit}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => handleNumpad(field, '0')}
-                    className="h-14 text-2xl font-bold bg-white border-2 border-lavanda rounded-xl hover:bg-lavanda/30 active:bg-lavanda transition-colors col-span-2"
-                  >
-                    0
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleNumpad(field, 'backspace')}
-                    className="h-14 text-lg font-bold bg-red-100 border-2 border-error rounded-xl hover:bg-red-200 active:bg-red-300 transition-colors"
-                  >
-                    ⌫
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-
-          <div className="card bg-pastel border-2 border-rosa-intenso text-center">
-            <p className="text-sm text-gray-500 font-semibold">Total del Día</p>
-            <p className="text-4xl font-extrabold text-rosa-intenso">
-              ${totalDia.toLocaleString('es-CL')}
-            </p>
-          </div>
-
+        <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto mb-4">
+          {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => handleKey(d)}
+              className="h-16 text-2xl font-bold bg-white border-2 border-lavanda rounded-xl hover:bg-lavanda/30 active:bg-lavanda transition-colors"
+            >
+              {d}
+            </button>
+          ))}
           <button
-            type="submit"
-            className="btn-primary w-full py-5 text-xl"
+            type="button"
+            onClick={() => handleKey('0')}
+            className="h-16 text-2xl font-bold bg-white border-2 border-lavanda rounded-xl hover:bg-lavanda/30 active:bg-lavanda transition-colors col-span-2"
           >
-            Guardar Venta del Día
+            0
           </button>
-        </form>
+          <button
+            type="button"
+            onClick={() => handleKey('⌫')}
+            className="h-16 text-lg font-bold bg-red-100 border-2 border-error rounded-xl hover:bg-red-200 transition-colors"
+          >
+            ⌫
+          </button>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setInput('')}
+            className="btn-secondary flex-1"
+          >
+            Limpiar
+          </button>
+          <button
+            type="button"
+            onClick={handleAdd}
+            className="btn-primary flex-[2]"
+          >
+            Agregar al Día
+          </button>
+        </div>
+
+        <div className="mt-4 flex justify-between items-center text-sm text-gray-500">
+          <span>Total hoy: <strong className="text-carbon">${totalDia.toLocaleString('es-CL')}</strong></span>
+          <span>Total mes: <strong className="text-rosa-intenso">${totalMes.toLocaleString('es-CL')}</strong></span>
+        </div>
+      </div>
+
+      <div className="flex justify-end print:hidden">
+        <button onClick={handlePrint} className="btn-secondary flex items-center gap-2">
+          <Printer className="w-5 h-5" />
+          Imprimir Mes
+        </button>
       </div>
 
       {ventas.length > 0 && (
@@ -339,51 +374,117 @@ export default function VentasPage() {
                   <th className="p-3 text-right">Con Boleta</th>
                   <th className="p-3 text-right">Sin Boleta</th>
                   <th className="p-3 text-right">Consumo</th>
-                  <th className="p-3 text-right">Total Día</th>
-                  <th className="p-3 text-right">Total Semana</th>
-                  <th className="p-3 text-right rounded-tr-xl">Total Mes</th>
+                  <th className="p-3 text-right rounded-tr-xl">Total</th>
+                  <th className="p-3 text-right rounded-tr-xl print:hidden">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {ventas
                   .sort((a, b) => b.fecha.localeCompare(a.fecha))
                   .slice(0, 30)
-                  .map((venta, idx) => (
-                    <tr
-                      key={venta.fecha}
-                      className={`border-b border-gray-100 ${
-                        idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                      }`}
-                    >
-                      <td className="p-3 font-semibold">
-                        {new Date(venta.fecha + 'T12:00:00').toLocaleDateString(
-                          'es-CL',
-                          { day: '2-digit', month: '2-digit' }
+                  .map((v) => {
+                    const isEditing = editingDate === v.fecha
+                    return (
+                      <tr
+                        key={v.fecha}
+                        className={`border-b border-gray-100 ${
+                          isEditing ? 'bg-yellow-50' : ''
+                        }`}
+                      >
+                        <td className="p-3 font-semibold">
+                          {new Date(v.fecha + 'T12:00:00').toLocaleDateString('es-CL', {
+                            day: '2-digit',
+                            month: '2-digit',
+                          })}
+                        </td>
+                        {isEditing ? (
+                          <>
+                            <td className="p-3">
+                              <input
+                                type="number"
+                                value={editValues.ventaBoleta}
+                                onChange={(e) =>
+                                  setEditValues((prev) => ({
+                                    ...prev,
+                                    ventaBoleta: Number(e.target.value),
+                                  }))
+                                }
+                                className="w-24 text-right border rounded p-1 text-sm"
+                              />
+                            </td>
+                            <td className="p-3">
+                              <input
+                                type="number"
+                                value={editValues.ventaSinBoleta}
+                                onChange={(e) =>
+                                  setEditValues((prev) => ({
+                                    ...prev,
+                                    ventaSinBoleta: Number(e.target.value),
+                                  }))
+                                }
+                                className="w-24 text-right border rounded p-1 text-sm"
+                              />
+                            </td>
+                            <td className="p-3">
+                              <input
+                                type="number"
+                                value={editValues.consumoPropio}
+                                onChange={(e) =>
+                                  setEditValues((prev) => ({
+                                    ...prev,
+                                    consumoPropio: Number(e.target.value),
+                                  }))
+                                }
+                                className="w-24 text-right border rounded p-1 text-sm"
+                              />
+                            </td>
+                            <td className="p-3 text-right font-bold text-exito">
+                              ${(editValues.ventaBoleta + editValues.ventaSinBoleta + editValues.consumoPropio).toLocaleString('es-CL')}
+                            </td>
+                            <td className="p-3 print:hidden">
+                              <div className="flex gap-1 justify-end">
+                                <button onClick={saveEdit} className="p-1 text-exito hover:bg-green-100 rounded">
+                                  <Check className="w-5 h-5" />
+                                </button>
+                                <button onClick={cancelEdit} className="p-1 text-error hover:bg-red-100 rounded">
+                                  <X className="w-5 h-5" />
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="p-3 text-right font-mono">${v.ventaBoleta.toLocaleString('es-CL')}</td>
+                            <td className="p-3 text-right font-mono">${v.ventaSinBoleta.toLocaleString('es-CL')}</td>
+                            <td className="p-3 text-right font-mono">${v.consumoPropio.toLocaleString('es-CL')}</td>
+                            <td className="p-3 text-right font-mono font-bold text-exito">
+                              ${(v.ventaBoleta + v.ventaSinBoleta + v.consumoPropio).toLocaleString('es-CL')}
+                            </td>
+                            <td className="p-3 print:hidden">
+                              <div className="flex gap-1 justify-end">
+                                <button onClick={() => startEdit(v)} className="p-1 text-lavanda hover:bg-purple-100 rounded">
+                                  <Edit2 className="w-5 h-5" />
+                                </button>
+                                <button onClick={() => handleDelete(v.fecha)} className="p-1 text-error hover:bg-red-100 rounded">
+                                  <Trash2 className="w-5 h-5" />
+                                </button>
+                              </div>
+                            </td>
+                          </>
                         )}
-                      </td>
-                      <td className="p-3 text-right font-mono">
-                        ${venta.ventaBoleta.toLocaleString('es-CL')}
-                      </td>
-                      <td className="p-3 text-right font-mono">
-                        ${venta.ventaSinBoleta.toLocaleString('es-CL')}
-                      </td>
-                      <td className="p-3 text-right font-mono">
-                        ${venta.consumoPropio.toLocaleString('es-CL')}
-                      </td>
-                      <td className="p-3 text-right font-mono font-bold text-exito">
-                        ${venta.totalDia.toLocaleString('es-CL')}
-                      </td>
-                      <td className="p-3 text-right font-mono text-lavanda font-semibold">
-                        ${weekTotal(venta.fecha).toLocaleString('es-CL')}
-                      </td>
-                      <td className="p-3 text-right font-mono text-rosa-intenso font-semibold">
-                        ${monthTotal(venta.fecha).toLocaleString('es-CL')}
-                      </td>
-                    </tr>
-                  ))}
+                      </tr>
+                    )
+                  })}
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-full shadow-lg z-50 font-semibold flex items-center gap-2 animate-bounce">
+          <Check className="w-5 h-5" />
+          {toast}
         </div>
       )}
     </div>

@@ -14,9 +14,11 @@ import {
   CheckCircle,
   AlertTriangle,
   Calendar,
+  Printer,
 } from 'lucide-react'
 
 type AdminTab = 'individual' | 'factura'
+type PriceMode = 'neto' | 'total'
 
 interface LoteItem {
   id: string
@@ -28,7 +30,8 @@ interface LoteItem {
   fechaVencimiento: string
   fechaElaboracion: string
   mesesDuracion: number
-  costoNetoUnitario: number
+  precioUnitario: number
+  priceMode: PriceMode
   linkImagen: string
 }
 
@@ -46,7 +49,7 @@ export default function AdminPage() {
         </p>
       </div>
 
-      <div className="flex gap-2 bg-white p-2 rounded-xl shadow-md">
+      <div className="flex gap-2 bg-white p-2 rounded-xl shadow-md print:hidden">
         <button
           onClick={() => setActiveTab('individual')}
           className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-semibold transition-all ${
@@ -78,23 +81,22 @@ export default function AdminPage() {
 }
 
 const TIPOS_PRODUCTO = [
-  'Lácteos',
-  'Carnes',
-  'Embutidos',
-  'Panes',
-  'Bebidas',
-  'Snacks',
-  'Aseo',
-  'Verduras',
-  'Frutas',
-  'Enlatados',
-  'Congelados',
-  'Endulzantes',
-  'Aceites',
-  'Harinas',
-  'Especias',
-  'Otro',
+  'Lácteos', 'Carnes', 'Embutidos', 'Panes', 'Bebidas',
+  'Snacks', 'Aseo', 'Verduras', 'Frutas', 'Enlatados',
+  'Congelados', 'Endulzantes', 'Aceites', 'Harinas', 'Especias', 'Otro',
 ]
+
+function calcTotals(precio: number, cantidad: number, mode: PriceMode) {
+  if (mode === 'neto') {
+    const neto = precio * cantidad
+    const iva = Math.round(neto * 0.19)
+    return { neto, iva, total: neto + iva, netoUnitario: precio }
+  }
+  const total = precio * cantidad
+  const neto = Math.round(total / 1.19)
+  const iva = total - neto
+  return { neto, iva, total, netoUnitario: neto / cantidad }
+}
 
 function FormularioIndividual() {
   const [form, setForm] = useState({
@@ -103,7 +105,8 @@ function FormularioIndividual() {
     producto: '',
     detalle: '',
     cantidad: 1,
-    costoNetoUnitario: '',
+    precioUnitario: '',
+    priceMode: 'neto' as PriceMode,
     linkImagen: '',
   })
   const [vencimiento, setVencimiento] = useState({
@@ -116,43 +119,31 @@ function FormularioIndividual() {
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
 
-  const handleCalcVencimiento = () => {
-    if (vencimiento.fechaElaboracion && vencimiento.mesesDuracion) {
-      const date = calcularVencimientoFinal(
-        vencimiento.fechaElaboracion,
-        vencimiento.mesesDuracion
-      )
-      setCalculatedDate(date)
-    }
-  }
+  const price = Number(form.precioUnitario || 0)
+  const totals = calcTotals(price, form.cantidad, form.priceMode)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.producto || form.tipo === '' || Number(form.costoNetoUnitario) <= 0) return
+    if (!form.producto || !form.tipo || price <= 0) return
 
     const fechaVencimiento =
       vencimiento.modo === 'fecha'
         ? vencimiento.fechaVencimiento
         : calculatedDate
 
-    const costoNeto = Number(form.costoNetoUnitario)
-    const iva = Math.round(costoNeto * 0.19 * form.cantidad)
-    const total = costoNeto * form.cantidad + iva
-
     const result = await registrarLote({
       codigoBarras: form.codigoBarras || '',
       producto: form.producto,
+      tipo: form.tipo,
+      detalle: form.detalle,
       cantidad: form.cantidad,
       fechaVencimiento,
       fechaElaboracion: vencimiento.fechaElaboracion,
-      mesesDuracion:
-        vencimiento.modo === 'calcular' ? vencimiento.mesesDuracion : 0,
-      costoNetoUnitario: costoNeto,
-      ivaCredito: iva,
-      totalFactura: total,
+      mesesDuracion: vencimiento.modo === 'calcular' ? vencimiento.mesesDuracion : 0,
+      costoNetoUnitario: totals.netoUnitario,
+      ivaCredito: totals.iva,
+      totalFactura: totals.total,
       linkImagen: form.linkImagen,
-      tipo: form.tipo,
-      detalle: form.detalle,
     })
 
     setStatus(result.success ? 'success' : 'error')
@@ -165,22 +156,15 @@ function FormularioIndividual() {
         producto: '',
         detalle: '',
         cantidad: 1,
-        costoNetoUnitario: '',
+        precioUnitario: '',
+        priceMode: 'neto',
         linkImagen: '',
       })
-      setVencimiento({
-        modo: 'fecha',
-        fechaVencimiento: '',
-        fechaElaboracion: '',
-        mesesDuracion: 6,
-      })
+      setVencimiento({ modo: 'fecha', fechaVencimiento: '', fechaElaboracion: '', mesesDuracion: 6 })
       setCalculatedDate('')
       setTimeout(() => setStatus('idle'), 3000)
     }
   }
-
-  const ivaCredito = Math.round(Number(form.costoNetoUnitario || 0) * 0.19 * form.cantidad)
-  const totalFactura = Number(form.costoNetoUnitario || 0) * form.cantidad + ivaCredito
 
   return (
     <div className="card space-y-6">
@@ -195,7 +179,6 @@ function FormularioIndividual() {
           <span className="font-semibold text-green-800">{message}</span>
         </div>
       )}
-
       {status === 'error' && (
         <div className="p-4 bg-red-100 border border-error rounded-xl flex items-center gap-2">
           <AlertTriangle className="w-6 h-6 text-error" />
@@ -209,7 +192,7 @@ function FormularioIndividual() {
           <input
             type="text"
             value={form.codigoBarras}
-            onChange={(e) => setForm((prev) => ({ ...prev, codigoBarras: e.target.value }))}
+            onChange={(e) => setForm((p) => ({ ...p, codigoBarras: e.target.value }))}
             className="input-field"
             placeholder="8400000000000"
           />
@@ -219,15 +202,13 @@ function FormularioIndividual() {
           <label className="label-field">Tipo de Producto *</label>
           <select
             value={form.tipo}
-            onChange={(e) => setForm((prev) => ({ ...prev, tipo: e.target.value }))}
+            onChange={(e) => setForm((p) => ({ ...p, tipo: e.target.value }))}
             className="input-field"
             required
           >
             <option value="">Seleccionar tipo...</option>
             {TIPOS_PRODUCTO.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
+              <option key={t} value={t}>{t}</option>
             ))}
           </select>
         </div>
@@ -237,7 +218,7 @@ function FormularioIndividual() {
           <input
             type="text"
             value={form.producto}
-            onChange={(e) => setForm((prev) => ({ ...prev, producto: e.target.value }))}
+            onChange={(e) => setForm((p) => ({ ...p, producto: e.target.value }))}
             className="input-field"
             placeholder="Ej: Vienesa Frankfurt"
             required
@@ -249,7 +230,7 @@ function FormularioIndividual() {
           <input
             type="text"
             value={form.detalle}
-            onChange={(e) => setForm((prev) => ({ ...prev, detalle: e.target.value }))}
+            onChange={(e) => setForm((p) => ({ ...p, detalle: e.target.value }))}
             className="input-field"
             placeholder="Ej: Marca Super, Pack x10..."
           />
@@ -261,42 +242,64 @@ function FormularioIndividual() {
             type="number"
             min="1"
             value={form.cantidad}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, cantidad: Number(e.target.value) }))
-            }
+            onChange={(e) => setForm((p) => ({ ...p, cantidad: Number(e.target.value) }))}
             className="input-field"
             required
           />
         </div>
 
         <div>
-          <label className="label-field">Costo Neto Unitario ($) *</label>
+          <label className="label-field">Modo de Precio</label>
+          <div className="flex gap-2 mb-2">
+            <button
+              type="button"
+              onClick={() => setForm((p) => ({ ...p, priceMode: 'neto' }))}
+              className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
+                form.priceMode === 'neto'
+                  ? 'bg-rosa-intenso text-white'
+                  : 'bg-white border-2 border-lavanda'
+              }`}
+            >
+              Valor Neto
+            </button>
+            <button
+              type="button"
+              onClick={() => setForm((p) => ({ ...p, priceMode: 'total' }))}
+              className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
+                form.priceMode === 'total'
+                  ? 'bg-rosa-intenso text-white'
+                  : 'bg-white border-2 border-lavanda'
+              }`}
+            >
+              Valor Total (con IVA)
+            </button>
+          </div>
+          <label className="label-field">
+            {form.priceMode === 'neto' ? 'Costo Neto Unitario ($)' : 'Precio Total Unitario ($)'}
+          </label>
           <input
             type="number"
             min="0"
-            value={form.costoNetoUnitario}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, costoNetoUnitario: e.target.value }))
-            }
+            value={form.precioUnitario}
+            onChange={(e) => setForm((p) => ({ ...p, precioUnitario: e.target.value }))}
             className="input-field"
-            placeholder="Precio sin IVA de cada unidad..."
             required
           />
         </div>
 
         <div className="card bg-lavanda/10 border-2 border-lavanda">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div className="p-3 bg-white rounded-xl">
-              <p className="text-sm text-gray-500">IVA Crédito (19%)</p>
-              <p className="text-xl font-bold text-lavanda">
-                ${ivaCredito.toLocaleString('es-CL')}
-              </p>
+              <p className="text-sm text-gray-500">Neto</p>
+              <p className="text-xl font-bold text-lavanda">${totals.neto.toLocaleString('es-CL')}</p>
+            </div>
+            <div className="p-3 bg-white rounded-xl">
+              <p className="text-sm text-gray-500">IVA (19%)</p>
+              <p className="text-xl font-bold text-lavanda">${totals.iva.toLocaleString('es-CL')}</p>
             </div>
             <div className="p-3 bg-rosa-intenso/10 rounded-xl">
-              <p className="text-sm text-gray-500">Total Factura</p>
-              <p className="text-xl font-bold text-rosa-intenso">
-                ${totalFactura.toLocaleString('es-CL')}
-              </p>
+              <p className="text-sm text-gray-500">Total</p>
+              <p className="text-xl font-bold text-rosa-intenso">${totals.total.toLocaleString('es-CL')}</p>
             </div>
           </div>
         </div>
@@ -306,7 +309,7 @@ function FormularioIndividual() {
           <input
             type="url"
             value={form.linkImagen}
-            onChange={(e) => setForm((prev) => ({ ...prev, linkImagen: e.target.value }))}
+            onChange={(e) => setForm((p) => ({ ...p, linkImagen: e.target.value }))}
             className="input-field"
             placeholder="https://drive.google.com/file/d/..."
           />
@@ -317,11 +320,10 @@ function FormularioIndividual() {
             <Calendar className="w-5 h-5" />
             Fecha de Vencimiento
           </h3>
-
           <div className="flex gap-2 mb-4">
             <button
               type="button"
-              onClick={() => setVencimiento((prev) => ({ ...prev, modo: 'fecha' }))}
+              onClick={() => setVencimiento((p) => ({ ...p, modo: 'fecha' }))}
               className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
                 vencimiento.modo === 'fecha'
                   ? 'bg-rosa-intenso text-white'
@@ -332,7 +334,7 @@ function FormularioIndividual() {
             </button>
             <button
               type="button"
-              onClick={() => setVencimiento((prev) => ({ ...prev, modo: 'calcular' }))}
+              onClick={() => setVencimiento((p) => ({ ...p, modo: 'calcular' }))}
               className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
                 vencimiento.modo === 'calcular'
                   ? 'bg-rosa-intenso text-white'
@@ -349,12 +351,7 @@ function FormularioIndividual() {
               <input
                 type="date"
                 value={vencimiento.fechaVencimiento}
-                onChange={(e) =>
-                  setVencimiento((prev) => ({
-                    ...prev,
-                    fechaVencimiento: e.target.value,
-                  }))
-                }
+                onChange={(e) => setVencimiento((p) => ({ ...p, fechaVencimiento: e.target.value }))}
                 className="input-field"
                 required
               />
@@ -366,12 +363,7 @@ function FormularioIndividual() {
                 <input
                   type="date"
                   value={vencimiento.fechaElaboracion}
-                  onChange={(e) =>
-                    setVencimiento((prev) => ({
-                      ...prev,
-                      fechaElaboracion: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => setVencimiento((p) => ({ ...p, fechaElaboracion: e.target.value }))}
                   className="input-field"
                   required
                 />
@@ -385,36 +377,28 @@ function FormularioIndividual() {
                   min="1"
                   max="60"
                   value={vencimiento.mesesDuracion}
-                  onChange={(e) =>
-                    setVencimiento((prev) => ({
-                      ...prev,
-                      mesesDuracion: Number(e.target.value),
-                    }))
-                  }
+                  onChange={(e) => setVencimiento((p) => ({ ...p, mesesDuracion: Number(e.target.value) }))}
                   className="w-full accent-rosa-intenso"
                 />
-                <div className="flex justify-between text-sm text-gray-500 mt-1">
-                  <span>1 mes</span>
-                  <span>60 meses</span>
-                </div>
               </div>
               <button
                 type="button"
-                onClick={handleCalcVencimiento}
+                onClick={() =>
+                  setCalculatedDate(
+                    calcularVencimientoFinal(vencimiento.fechaElaboracion, vencimiento.mesesDuracion)
+                  )
+                }
                 className="btn-secondary w-full"
               >
                 Calcular Vencimiento
               </button>
               {calculatedDate && (
                 <div className="card bg-white border-2 border-rosa-intenso text-center">
-                  <p className="text-sm text-gray-500">
-                    Consumir antes de:
-                  </p>
+                  <p className="text-sm text-gray-500">Consumir antes de:</p>
                   <p className="text-2xl font-extrabold text-rosa-intenso">
-                    {new Date(calculatedDate + 'T12:00:00').toLocaleDateString(
-                      'es-CL',
-                      { year: 'numeric', month: 'long', day: 'numeric' }
-                    )}
+                    {new Date(calculatedDate + 'T12:00:00').toLocaleDateString('es-CL', {
+                      year: 'numeric', month: 'long', day: 'numeric',
+                    })}
                   </p>
                 </div>
               )}
@@ -433,17 +417,9 @@ function FormularioIndividual() {
 function FormularioFactura() {
   const [items, setItems] = useState<LoteItem[]>([
     {
-      id: '1',
-      codigoBarras: '',
-      producto: '',
-      tipo: '',
-      detalle: '',
-      cantidad: 1,
-      fechaVencimiento: '',
-      fechaElaboracion: '',
-      mesesDuracion: 6,
-      costoNetoUnitario: 0,
-      linkImagen: '',
+      id: '1', codigoBarras: '', producto: '', tipo: '', detalle: '',
+      cantidad: 1, fechaVencimiento: '', fechaElaboracion: '', mesesDuracion: 6,
+      precioUnitario: 0, priceMode: 'neto', linkImagen: '',
     },
   ])
   const [vencimientoModo, setVencimientoModo] = useState<'igual' | 'individual'>('igual')
@@ -457,53 +433,38 @@ function FormularioFactura() {
   const [message, setMessage] = useState('')
 
   const updateItem = (id: string, field: keyof LoteItem, value: unknown) => {
-    setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
-    )
+    setItems((p) => p.map((i) => (i.id === id ? { ...i, [field]: value } : i)))
   }
 
   const addItem = () => {
-    setItems((prev) => [
-      ...prev,
+    setItems((p) => [
+      ...p,
       {
-        id: Date.now().toString(),
-        codigoBarras: '',
-        producto: '',
-        tipo: '',
-        detalle: '',
-        cantidad: 1,
-        fechaVencimiento: '',
-        fechaElaboracion: '',
-        mesesDuracion: 6,
-        costoNetoUnitario: 0,
-        linkImagen: '',
+        id: Date.now().toString(), codigoBarras: '', producto: '', tipo: '', detalle: '',
+        cantidad: 1, fechaVencimiento: '', fechaElaboracion: '', mesesDuracion: 6,
+        precioUnitario: 0, priceMode: 'neto', linkImagen: '',
       },
     ])
   }
 
   const removeItem = (id: string) => {
-    if (items.length > 1) {
-      setItems((prev) => prev.filter((item) => item.id !== id))
-    }
+    if (items.length > 1) setItems((p) => p.filter((i) => i.id !== id))
   }
 
   const granTotal = items.reduce((sum, item) => {
-    const neto = item.costoNetoUnitario * item.cantidad
-    const iva = Math.round(neto * 0.19)
-    return sum + neto + iva
+    const t = calcTotals(item.precioUnitario, item.cantidad, item.priceMode)
+    return sum + t.total
   }, 0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const valid = items.filter((i) => i.producto && i.tipo && i.precioUnitario > 0)
+    if (valid.length === 0) return
 
-    const validItems = items.filter((i) => i.producto && i.tipo && i.costoNetoUnitario > 0)
-    if (validItems.length === 0) return
-
-    const lotes = validItems.map((item) => {
+    const lotes = valid.map((item) => {
       let fechaVencimiento = ''
       let fechaElaboracion = ''
       let mesesDuracion = 0
-
       if (vencimientoModo === 'igual') {
         if (vencimientoIgual.modo === 'fecha') {
           fechaVencimiento = vencimientoIgual.fechaVencimiento
@@ -517,44 +478,32 @@ function FormularioFactura() {
         fechaElaboracion = item.fechaElaboracion
         mesesDuracion = item.mesesDuracion
       }
-
-      const neto = item.costoNetoUnitario * item.cantidad
-      const iva = Math.round(neto * 0.19)
-
+      const t = calcTotals(item.precioUnitario, item.cantidad, item.priceMode)
       return {
         codigoBarras: item.codigoBarras || '',
         producto: item.producto,
+        tipo: item.tipo,
+        detalle: item.detalle,
         cantidad: item.cantidad,
         fechaVencimiento,
         fechaElaboracion,
         mesesDuracion,
-        costoNetoUnitario: item.costoNetoUnitario,
-        ivaCredito: iva,
-        totalFactura: neto + iva,
+        costoNetoUnitario: t.netoUnitario,
+        ivaCredito: t.iva,
+        totalFactura: t.total,
         linkImagen: item.linkImagen,
-        tipo: item.tipo,
-        detalle: item.detalle,
       }
     })
 
     const result = await registrarLotesMultiple(lotes)
     setStatus(result.success ? 'success' : 'error')
     setMessage(result.message)
-
     if (result.success) {
       setItems([
         {
-          id: '1',
-          codigoBarras: '',
-          producto: '',
-          tipo: '',
-          detalle: '',
-          cantidad: 1,
-          fechaVencimiento: '',
-          fechaElaboracion: '',
-          mesesDuracion: 6,
-          costoNetoUnitario: 0,
-          linkImagen: '',
+          id: '1', codigoBarras: '', producto: '', tipo: '', detalle: '',
+          cantidad: 1, fechaVencimiento: '', fechaElaboracion: '', mesesDuracion: 6,
+          precioUnitario: 0, priceMode: 'neto', linkImagen: '',
         },
       ])
       setTimeout(() => setStatus('idle'), 3000)
@@ -563,10 +512,16 @@ function FormularioFactura() {
 
   return (
     <div className="card space-y-6">
-      <h2 className="text-2xl font-bold flex items-center gap-2">
-        <FileText className="w-7 h-7 text-rosa-intenso" />
-        Ingreso por Factura
-      </h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          <FileText className="w-7 h-7 text-rosa-intenso" />
+          Ingreso por Factura
+        </h2>
+        <button type="button" onClick={() => window.print()} className="btn-secondary flex items-center gap-2 print:hidden">
+          <Printer className="w-5 h-5" />
+          Imprimir
+        </button>
+      </div>
 
       {status === 'success' && (
         <div className="p-4 bg-green-100 border border-exito rounded-xl flex items-center gap-2">
@@ -574,7 +529,6 @@ function FormularioFactura() {
           <span className="font-semibold text-green-800">{message}</span>
         </div>
       )}
-
       {status === 'error' && (
         <div className="p-4 bg-red-100 border border-error rounded-xl flex items-center gap-2">
           <AlertTriangle className="w-6 h-6 text-error" />
@@ -582,224 +536,97 @@ function FormularioFactura() {
         </div>
       )}
 
-      <div>
+      <div className="print:hidden">
         <label className="label-field">¿Los productos vencen igual?</label>
         <div className="flex gap-2 mb-3">
-          <button
-            type="button"
-            onClick={() => setVencimientoModo('igual')}
-            className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
-              vencimientoModo === 'igual'
-                ? 'bg-rosa-intenso text-white'
-                : 'bg-white border-2 border-lavanda'
-            }`}
-          >
+          <button type="button" onClick={() => setVencimientoModo('igual')}
+            className={`flex-1 py-2 rounded-lg font-semibold transition-all ${vencimientoModo === 'igual' ? 'bg-rosa-intenso text-white' : 'bg-white border-2 border-lavanda'}`}>
             Todos la misma fecha
           </button>
-          <button
-            type="button"
-            onClick={() => setVencimientoModo('individual')}
-            className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
-              vencimientoModo === 'individual'
-                ? 'bg-rosa-intenso text-white'
-                : 'bg-white border-2 border-lavanda'
-            }`}
-          >
+          <button type="button" onClick={() => setVencimientoModo('individual')}
+            className={`flex-1 py-2 rounded-lg font-semibold transition-all ${vencimientoModo === 'individual' ? 'bg-rosa-intenso text-white' : 'bg-white border-2 border-lavanda'}`}>
             Cada uno distinto
           </button>
         </div>
       </div>
 
-      {vencimientoModo === 'igual' && (
-        <div className="card bg-pastel border-2 border-pink-200">
-          <h3 className="font-bold mb-3">Vencimiento para todos los productos</h3>
-          <div className="flex gap-2 mb-3">
-            <button
-              type="button"
-              onClick={() => setVencimientoIgual((prev) => ({ ...prev, modo: 'fecha' }))}
-              className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
-                vencimientoIgual.modo === 'fecha'
-                  ? 'bg-rosa-intenso text-white'
-                  : 'bg-white border-2 border-lavanda'
-              }`}
-            >
-              Tiene fecha
-            </button>
-            <button
-              type="button"
-              onClick={() => setVencimientoIgual((prev) => ({ ...prev, modo: 'calcular' }))}
-              className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
-                vencimientoIgual.modo === 'calcular'
-                  ? 'bg-rosa-intenso text-white'
-                  : 'bg-white border-2 border-lavanda'
-              }`}
-            >
-              No tiene fecha
-            </button>
-          </div>
-          {vencimientoIgual.modo === 'fecha' ? (
-            <input
-              type="date"
-              value={vencimientoIgual.fechaVencimiento}
-              onChange={(e) =>
-                setVencimientoIgual((prev) => ({
-                  ...prev,
-                  fechaVencimiento: e.target.value,
-                }))
-              }
-              className="input-field"
-            />
-          ) : (
-            <div className="space-y-2">
-              <input
-                type="date"
-                value={vencimientoIgual.fechaElaboracion}
-                onChange={(e) =>
-                  setVencimientoIgual((prev) => ({
-                    ...prev,
-                    fechaElaboracion: e.target.value,
-                  }))
-                }
-                className="input-field"
-                placeholder="Fecha de elaboración"
-              />
-              <label className="text-sm text-gray-500">
-                Meses: {vencimientoIgual.mesesDuracion}
-              </label>
-              <input
-                type="range"
-                min="1"
-                max="60"
-                value={vencimientoIgual.mesesDuracion}
-                onChange={(e) =>
-                  setVencimientoIgual((prev) => ({
-                    ...prev,
-                    mesesDuracion: Number(e.target.value),
-                  }))
-                }
-                className="w-full accent-rosa-intenso"
-              />
-            </div>
-          )}
-        </div>
-      )}
+      {vencimientoModo === 'igual' && vencimientoIgual.modo === 'fecha' ? null : null}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {items.map((item, idx) => (
-          <div key={item.id} className="card border-2 border-gray-200">
-            <div className="flex items-center justify-between mb-3">
-              <span className="font-bold text-lg">Producto {idx + 1}</span>
-              {items.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeItem(item.id)}
-                  className="p-2 text-error hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="label-field">Tipo *</label>
-                <select
-                  value={item.tipo}
-                  onChange={(e) => updateItem(item.id, 'tipo', e.target.value)}
-                  className="input-field"
-                  required
-                >
-                  <option value="">Seleccionar...</option>
-                  {TIPOS_PRODUCTO.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
+        {items.map((item, idx) => {
+          const t = calcTotals(item.precioUnitario, item.cantidad, item.priceMode)
+          return (
+            <div key={item.id} className="card border-2 border-gray-200 print:border print:shadow-none">
+              <div className="flex items-center justify-between mb-3 print:hidden">
+                <span className="font-bold text-lg">Producto {idx + 1}</span>
+                {items.length > 1 && (
+                  <button type="button" onClick={() => removeItem(item.id)} className="p-2 text-error hover:bg-red-50 rounded-lg">
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
               </div>
 
-              <div>
-                <label className="label-field">Nombre *</label>
-                <input
-                  type="text"
-                  value={item.producto}
-                  onChange={(e) => updateItem(item.id, 'producto', e.target.value)}
-                  className="input-field"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="label-field">Detalle (opcional)</label>
-                <input
-                  type="text"
-                  value={item.detalle}
-                  onChange={(e) => updateItem(item.id, 'detalle', e.target.value)}
-                  className="input-field"
-                />
-              </div>
-
-              <div>
-                <label className="label-field">Cantidad *</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={item.cantidad}
-                  onChange={(e) => updateItem(item.id, 'cantidad', Number(e.target.value))}
-                  className="input-field"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="label-field">Costo Neto Unitario ($) *</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={item.costoNetoUnitario || ''}
-                  onChange={(e) =>
-                    updateItem(item.id, 'costoNetoUnitario', Number(e.target.value))
-                  }
-                  className="input-field"
-                  required
-                />
-              </div>
-
-              {vencimientoModo === 'individual' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="label-field">Fecha Vencimiento *</label>
-                  <input
-                    type="date"
-                    value={item.fechaVencimiento}
-                    onChange={(e) =>
-                      updateItem(item.id, 'fechaVencimiento', e.target.value)
-                    }
+                  <label className="label-field">Tipo *</label>
+                  <select
+                    value={item.tipo}
+                    onChange={(e) => updateItem(item.id, 'tipo', e.target.value)}
                     className="input-field"
                     required
-                  />
+                  >
+                    <option value="">Seleccionar...</option>
+                    {TIPOS_PRODUCTO.map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
                 </div>
-              )}
+                <div>
+                  <label className="label-field">Nombre *</label>
+                  <input type="text" value={item.producto} onChange={(e) => updateItem(item.id, 'producto', e.target.value)} className="input-field" required />
+                </div>
+                <div>
+                  <label className="label-field">Detalle (opcional)</label>
+                  <input type="text" value={item.detalle} onChange={(e) => updateItem(item.id, 'detalle', e.target.value)} className="input-field" />
+                </div>
+                <div>
+                  <label className="label-field">Cantidad *</label>
+                  <input type="number" min="1" value={item.cantidad} onChange={(e) => updateItem(item.id, 'cantidad', Number(e.target.value))} className="input-field" required />
+                </div>
+                <div>
+                  <label className="label-field">Modo de Precio</label>
+                  <div className="flex gap-2 mt-1">
+                    <button type="button" onClick={() => updateItem(item.id, 'priceMode', 'neto')}
+                      className={`flex-1 py-1 rounded text-sm font-semibold ${item.priceMode === 'neto' ? 'bg-rosa-intenso text-white' : 'border border-lavanda'}`}>
+                      Neto
+                    </button>
+                    <button type="button" onClick={() => updateItem(item.id, 'priceMode', 'total')}
+                      className={`flex-1 py-1 rounded text-sm font-semibold ${item.priceMode === 'total' ? 'bg-rosa-intenso text-white' : 'border border-lavanda'}`}>
+                      Total
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="label-field">Precio {item.priceMode === 'neto' ? 'Neto' : 'Total'} Unitario *</label>
+                  <input type="number" min="0" value={item.precioUnitario || ''} onChange={(e) => updateItem(item.id, 'precioUnitario', Number(e.target.value))} className="input-field" required />
+                </div>
+                <div className="md:col-span-2 p-3 bg-lavanda/10 rounded-xl">
+                  <p className="text-sm text-gray-500">Neto: ${t.neto.toLocaleString('es-CL')} | IVA: ${t.iva.toLocaleString('es-CL')} | <strong>Total: ${t.total.toLocaleString('es-CL')}</strong></p>
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
 
-        <button
-          type="button"
-          onClick={addItem}
-          className="btn-secondary w-full flex items-center justify-center gap-2"
-        >
+        <button type="button" onClick={addItem} className="btn-secondary w-full flex items-center justify-center gap-2 print:hidden">
           <Plus className="w-5 h-5" />
-          Agregar otro producto a la factura
+          Agregar otro producto
         </button>
 
         <div className="card bg-rosa-intenso/10 border-2 border-rosa-intenso text-center">
           <p className="text-sm text-gray-500">Total Factura (con IVA)</p>
-          <p className="text-4xl font-extrabold text-rosa-intenso">
-            ${granTotal.toLocaleString('es-CL')}
-          </p>
+          <p className="text-4xl font-extrabold text-rosa-intenso">${granTotal.toLocaleString('es-CL')}</p>
         </div>
 
-        <button type="submit" className="btn-primary w-full py-5 text-xl">
+        <button type="submit" className="btn-primary w-full py-5 text-xl print:hidden">
           Registrar Todos los Productos
         </button>
       </form>
