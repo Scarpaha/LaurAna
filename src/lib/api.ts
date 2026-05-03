@@ -62,27 +62,29 @@ export async function fetchProducts(): Promise<Producto[]> {
     const data = await response.json()
 
     if (data.success && data.data) {
-      return data.data.map((item: Record<string, unknown>) => ({
-        id: item.id || item.ID || item.codigo || '',
-        nombre: item.nombre || item.Nombre || item.producto || '',
-        precio: Number(item.precio || item.Precio || item.precio_venta || 0),
-        categoria: item.categoria || item.Categoria || 'Sin categoría',
-        imagen: convertDriveImageUrl(
-          item.imagen || item.Imagen || item.foto || item.url_imagen || ''
-        ),
-        codigoBarras:
-          item.codigoBarras ||
-          item.codigo_barras ||
-          item.CodigoBarras ||
-          item.barcode ||
-          '',
-        fechaVencimiento:
-          item.fechaVencimiento ||
-          item.fecha_vencimiento ||
-          item.vencimiento ||
-          '',
-        stock: Number(item.stock || item.Stock || item.cantidad || 0),
-      }))
+      return data.data.map((item: Record<string, unknown>) => {
+        const str = (val: unknown): string => (typeof val === 'string' ? val : '')
+        const num = (val: unknown): number => {
+          const n = Number(val)
+          return isNaN(n) ? 0 : n
+        }
+        return {
+          id: str(item.id || item.ID || item.codigo),
+          nombre: str(item.nombre || item.Nombre || item.producto),
+          precio: num(item.precio || item.Precio || item.precio_venta),
+          categoria: str(item.categoria || item.Categoria || 'Sin categoría'),
+          imagen: convertDriveImageUrl(
+            str(item.imagen || item.Imagen || item.foto || item.url_imagen)
+          ),
+          codigoBarras: str(
+            item.codigoBarras || item.codigo_barras || item.CodigoBarras || item.barcode
+          ),
+          fechaVencimiento: str(
+            item.fechaVencimiento || item.fecha_vencimiento || item.vencimiento
+          ),
+          stock: num(item.stock || item.Stock || item.cantidad),
+        }
+      })
     }
 
     return []
@@ -137,10 +139,14 @@ export async function fetchSalesSummary(): Promise<{
     const data = await response.json()
 
     if (data.success && data.data) {
+      const num = (val: unknown): number => {
+        const n = Number(val)
+        return isNaN(n) ? 0 : n
+      }
       return {
-        inversionTotal: Number(data.data.inversionTotal || data.data.inversion_total || 0),
-        metaVenta: Number(data.data.metaVenta || data.data.meta_venta || 0),
-        ventaReal: Number(data.data.ventaReal || data.data.venta_real || 0),
+        inversionTotal: num(data.data.inversionTotal || data.data.inversion_total),
+        metaVenta: num(data.data.metaVenta || data.data.meta_venta),
+        ventaReal: num(data.data.ventaReal || data.data.venta_real),
       }
     }
 
@@ -165,17 +171,25 @@ export async function fetchExpiringProducts(days: number = 15): Promise<Producto
     const data = await response.json()
 
     if (data.success && data.data) {
-      return data.data.map((item: Record<string, unknown>) => ({
-        id: item.id || item.ID || '',
-        nombre: item.nombre || item.Nombre || '',
-        precio: Number(item.precio || item.Precio || 0),
-        categoria: item.categoria || item.Categoria || 'Sin categoría',
-        imagen: convertDriveImageUrl(item.imagen || item.Imagen || ''),
-        codigoBarras: item.codigoBarras || item.codigo_barras || '',
-        fechaVencimiento:
-          item.fechaVencimiento || item.fecha_vencimiento || item.vencimiento || '',
-        stock: Number(item.stock || item.Stock || 0),
-      }))
+      return data.data.map((item: Record<string, unknown>) => {
+        const str = (val: unknown): string => (typeof val === 'string' ? val : '')
+        const num = (val: unknown): number => {
+          const n = Number(val)
+          return isNaN(n) ? 0 : n
+        }
+        return {
+          id: str(item.id || item.ID),
+          nombre: str(item.nombre || item.Nombre),
+          precio: num(item.precio || item.Precio),
+          categoria: str(item.categoria || item.Categoria || 'Sin categoría'),
+          imagen: convertDriveImageUrl(str(item.imagen || item.Imagen)),
+          codigoBarras: str(item.codigoBarras || item.codigo_barras),
+          fechaVencimiento: str(
+            item.fechaVencimiento || item.fecha_vencimiento || item.vencimiento
+          ),
+          stock: num(item.stock || item.Stock),
+        }
+      })
     }
 
     return []
