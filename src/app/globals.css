@@ -1,0 +1,71 @@
+@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Architects+Daughter&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-pastel: #FFEBEE;
+  --color-lavanda: #D1A7E1;
+  --color-rosa-intenso: #F06292;
+  --color-carbon: #1A1A1A;
+  --color-exito: #66BB6A;
+  --color-aviso: #FFD54F;
+  --color-error: #EF5350;
+}
+
+body {
+  background-color: var(--color-pastel);
+  color: var(--color-carbon);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-lavanda) transparent;
+}
+
+.btn-primary {
+  @apply bg-rosa-intenso text-white font-bold py-3 px-6 rounded-xl shadow-lg 
+         hover:bg-pink-600 active:scale-95 transition-all duration-200 
+         disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.btn-secondary {
+  @apply bg-lavanda text-carbon font-bold py-3 px-6 rounded-xl shadow-lg 
+         hover:bg-purple-400 active:scale-95 transition-all duration-200;
+}
+
+.btn-success {
+  @apply bg-exito text-white font-bold py-3 px-6 rounded-xl shadow-lg 
+         hover:bg-green-600 active:scale-95 transition-all duration-200;
+}
+
+.card {
+  @apply bg-white rounded-2xl shadow-lg p-4 border border-pink-100;
+}
+
+.input-field {
+  @apply w-full px-4 py-3 rounded-xl border-2 border-lavanda 
+         focus:border-rosa-intenso focus:ring-2 focus:ring-pink-200 
+         outline-none transition-all duration-200 text-carbon text-lg;
+}
+
+.label-field {
+  @apply block text-carbon font-semibold mb-1 text-lg;
+}
+
+.badge {
+  @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold;
+}
+
+.badge-success {
+  @apply bg-green-100 text-green-800;
+}
+
+.badge-warning {
+  @apply bg-yellow-100 text-yellow-800;
+}
+
+.badge-error {
+  @apply bg-red-100 text-red-800;
+}
