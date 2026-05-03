@@ -98,6 +98,7 @@ const TIPOS_PRODUCTO = [
 
 function FormularioIndividual() {
   const [form, setForm] = useState({
+    codigoBarras: '',
     tipo: '',
     producto: '',
     detalle: '',
@@ -158,6 +159,7 @@ function FormularioIndividual() {
 
     if (result.success) {
       setForm({
+        codigoBarras: '',
         tipo: '',
         producto: '',
         detalle: '',
@@ -201,6 +203,17 @@ function FormularioIndividual() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="label-field">Código de Barras (opcional)</label>
+          <input
+            type="text"
+            value={form.codigoBarras}
+            onChange={(e) => setForm((prev) => ({ ...prev, codigoBarras: e.target.value }))}
+            className="input-field"
+            placeholder="8400000000000"
+          />
+        </div>
+
         <div>
           <label className="label-field">Tipo de Producto *</label>
           <select
