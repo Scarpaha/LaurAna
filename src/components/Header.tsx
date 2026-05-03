@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Store, ShoppingCart, Shield, BookOpen, User } from 'lucide-react'
+import { Store, BookOpen, ShoppingCart, Package, AlertTriangle } from 'lucide-react'
 
 const navItems = [
-  { href: '/', label: 'Catálogo', icon: Store, role: 'public' },
-  { href: '/senior', label: 'Papá', icon: User, role: 'senior' },
-  { href: '/admin', label: 'Admin', icon: Shield, role: 'admin' },
-  { href: '/ayuda', label: 'Ayuda', icon: BookOpen, role: 'all' },
+  { href: '/', label: 'Catálogo', icon: Store },
+  { href: '/ventas', label: 'Ventas', icon: ShoppingCart },
+  { href: '/admin', label: 'Productos', icon: Package },
+  { href: '/vencimientos', label: 'Alertas', icon: AlertTriangle },
+  { href: '/ayuda', label: 'Ayuda', icon: BookOpen },
 ]
 
 export default function Header() {
@@ -23,7 +24,7 @@ export default function Header() {
               LaurAna
             </span>
             <span className="font-slogan text-sm text-lavanda -mt-1">
-              Tienda de abarrotes
+              🛒Tienda de abarrotes
             </span>
           </Link>
 
@@ -59,14 +60,12 @@ export default function Header() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-all ${
+                className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-all ${
                   isActive ? 'text-rosa-intenso' : 'text-gray-500'
                 }`}
               >
-                <Icon
-                  className={`w-6 h-6 ${isActive ? 'scale-110' : ''}`}
-                />
-                <span className="text-xs font-semibold">{item.label}</span>
+                <Icon className={`w-5 h-5 ${isActive ? 'scale-110' : ''}`} />
+                <span className="text-[10px] font-semibold">{item.label}</span>
               </Link>
             )
           })}

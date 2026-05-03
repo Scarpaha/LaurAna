@@ -1,284 +1,156 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState } from 'react'
 import {
-  fetchProducts,
-  searchByBarcode,
-  submitInvoice,
-  type Producto,
+  registrarLote,
+  registrarLotesMultiple,
+  calcularVencimientoFinal,
 } from '@/lib/api'
 import {
-  ScanBarcode,
+  Package,
   FileText,
-  Calendar,
-  Camera,
-  CameraOff,
+  Plus,
+  Trash2,
   CheckCircle,
   AlertTriangle,
-  Loader2,
-  Plus,
-  Minus,
-  Calculator,
+  Calendar,
 } from 'lucide-react'
-import { Html5Qrcode } from 'html5-qrcode'
 
-type AdminTab = 'scanner' | 'invoice' | 'calculator'
+type AdminTab = 'individual' | 'factura'
+
+interface LoteItem {
+  id: string
+  codigoBarras: string
+  producto: string
+  tipo: string
+  detalle: string
+  cantidad: number
+  fechaVencimiento: string
+  fechaElaboracion: string
+  mesesDuracion: number
+  costoNetoUnitario: number
+  linkImagen: string
+}
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<AdminTab>('scanner')
+  const [activeTab, setActiveTab] = useState<AdminTab>('individual')
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
       <div className="text-center">
         <h1 className="font-logo text-5xl text-rosa-intenso mb-2">
-          Panel Admin
+          Productos
         </h1>
         <p className="font-slogan text-lavanda text-lg">
-          Gestión de inventario y control
+          Ingreso de productos y facturas
         </p>
       </div>
 
       <div className="flex gap-2 bg-white p-2 rounded-xl shadow-md">
-        {[
-          { id: 'scanner' as AdminTab, label: 'Escáner', icon: ScanBarcode },
-          { id: 'invoice' as AdminTab, label: 'Facturas', icon: FileText },
-          {
-            id: 'calculator' as AdminTab,
-            label: 'Vencimiento',
-            icon: Calendar,
-          },
-        ].map((tab) => {
-          const Icon = tab.icon
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-semibold transition-all ${
-                activeTab === tab.id
-                  ? 'bg-rosa-intenso text-white shadow-md'
-                  : 'text-carbon hover:bg-lavanda/20'
-              }`}
-            >
-              <Icon className="w-5 h-5" />
-              <span className="hidden sm:inline">{tab.label}</span>
-            </button>
-          )
-        })}
+        <button
+          onClick={() => setActiveTab('individual')}
+          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-semibold transition-all ${
+            activeTab === 'individual'
+              ? 'bg-rosa-intenso text-white shadow-md'
+              : 'text-carbon hover:bg-lavanda/20'
+          }`}
+        >
+          <Package className="w-5 h-5" />
+          Individual
+        </button>
+        <button
+          onClick={() => setActiveTab('factura')}
+          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-semibold transition-all ${
+            activeTab === 'factura'
+              ? 'bg-rosa-intenso text-white shadow-md'
+              : 'text-carbon hover:bg-lavanda/20'
+          }`}
+        >
+          <FileText className="w-5 h-5" />
+          Por Factura
+        </button>
       </div>
 
-      {activeTab === 'scanner' && <BarcodeScanner />}
-      {activeTab === 'invoice' && <InvoiceForm />}
-      {activeTab === 'calculator' && <ExpiryCalculator />}
+      {activeTab === 'individual' && <FormularioIndividual />}
+      {activeTab === 'factura' && <FormularioFactura />}
     </div>
   )
 }
 
-function BarcodeScanner() {
-  const [scanning, setScanning] = useState(false)
-  const [searchResult, setSearchResult] = useState<Producto | null>(null)
-  const [manualCode, setManualCode] = useState('')
-  const [allProducts, setAllProducts] = useState<Producto[]>([])
-  const [searchLoading, setSearchLoading] = useState(false)
-  const scannerRef = useRef<Html5Qrcode | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
+const TIPOS_PRODUCTO = [
+  'Lácteos',
+  'Carnes',
+  'Embutidos',
+  'Panes',
+  'Bebidas',
+  'Snacks',
+  'Aseo',
+  'Verduras',
+  'Frutas',
+  'Enlatados',
+  'Congelados',
+  'Endulzantes',
+  'Aceites',
+  'Harinas',
+  'Especias',
+  'Otro',
+]
 
-  useEffect(() => {
-    fetchProducts().then(setAllProducts)
-    return () => {
-      scannerRef.current?.stop().catch(() => {})
-    }
-  }, [])
-
-  const startScanner = async () => {
-    if (!containerRef.current) return
-
-    setScanning(true)
-    setSearchResult(null)
-
-    const scanner = new Html5Qrcode('barcode-reader')
-    scannerRef.current = scanner
-
-    try {
-      await scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        async (decodedText) => {
-          await scanner.stop()
-          setScanning(false)
-          setSearchLoading(true)
-          const result = await searchByBarcode(decodedText)
-          setSearchResult(result)
-          setSearchLoading(false)
-        },
-        () => {}
-      )
-    } catch (err) {
-      console.error('Scanner error:', err)
-      setScanning(false)
-    }
-  }
-
-  const stopScanner = async () => {
-    if (scannerRef.current) {
-      await scannerRef.current.stop().catch(() => {})
-      setScanning(false)
-    }
-  }
-
-  const handleManualSearch = async () => {
-    if (!manualCode.trim()) return
-    setSearchLoading(true)
-    const result = await searchByBarcode(manualCode.trim())
-    setSearchResult(result)
-    setSearchLoading(false)
-  }
-
-  return (
-    <div className="card space-y-6">
-      <h2 className="text-2xl font-bold flex items-center gap-2">
-        <ScanBarcode className="w-7 h-7 text-rosa-intenso" />
-        Escáner de Código de Barras
-      </h2>
-
-      {!scanning ? (
-        <div className="space-y-4">
-          <button onClick={startScanner} className="btn-primary w-full py-5 text-xl">
-            <Camera className="w-6 h-6 inline mr-2" />
-            Activar Cámara
-          </button>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t-2 border-lavanda"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-500">
-                o ingresa el código manualmente
-              </span>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={manualCode}
-              onChange={(e) => setManualCode(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleManualSearch()}
-              placeholder="Código de barras..."
-              className="input-field flex-1"
-            />
-            <button
-              onClick={handleManualSearch}
-              className="btn-secondary px-6"
-            >
-              Buscar
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          <div
-            ref={containerRef}
-            id="barcode-reader"
-            className="w-full max-w-sm mx-auto rounded-xl overflow-hidden"
-          />
-          <button onClick={stopScanner} className="btn-secondary w-full">
-            <CameraOff className="w-5 h-5 inline mr-2" />
-            Detener Cámara
-          </button>
-        </div>
-      )}
-
-      {searchLoading && (
-        <div className="flex items-center justify-center py-4">
-          <Loader2 className="w-8 h-8 text-rosa-intenso animate-spin" />
-        </div>
-      )}
-
-      {searchResult && (
-        <div className="card bg-pastel border-2 border-lavanda">
-          <div className="flex items-center gap-2 mb-3">
-            <CheckCircle className="w-6 h-6 text-exito" />
-            <h3 className="text-xl font-bold">Producto Encontrado</h3>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-sm text-gray-500">Nombre</p>
-              <p className="font-bold text-lg">{searchResult.nombre}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Precio</p>
-              <p className="font-bold text-lg text-rosa-intenso">
-                ${searchResult.precio.toLocaleString('es-CL')}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Categoría</p>
-              <p className="font-semibold">{searchResult.categoria}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Stock</p>
-              <p className="font-semibold">{searchResult.stock}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Código</p>
-              <p className="font-mono text-sm">{searchResult.codigoBarras}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Vencimiento</p>
-              <p className="font-semibold">
-                {searchResult.fechaVencimiento || 'Sin fecha'}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {searchResult === null && !searchLoading && manualCode && (
-        <div className="card bg-red-50 border-2 border-error">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-6 h-6 text-error" />
-            <p className="font-bold text-error">
-              Producto no encontrado con ese código
-            </p>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function InvoiceForm() {
+function FormularioIndividual() {
   const [form, setForm] = useState({
+    tipo: '',
     producto: '',
+    detalle: '',
     cantidad: 1,
-    neto: 0,
-    iva: 0,
-    total: 0,
-    fechaVencimiento: '',
+    costoNetoUnitario: '',
+    linkImagen: '',
   })
+  const [vencimiento, setVencimiento] = useState({
+    modo: 'fecha' as 'fecha' | 'calcular',
+    fechaVencimiento: '',
+    fechaElaboracion: '',
+    mesesDuracion: 6,
+  })
+  const [calculatedDate, setCalculatedDate] = useState('')
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
 
-  const handleNetoChange = (neto: number) => {
-    const iva = Math.round(neto * 0.19)
-    const total = neto + iva
-    setForm((prev) => ({ ...prev, neto, iva, total }))
+  const handleCalcVencimiento = () => {
+    if (vencimiento.fechaElaboracion && vencimiento.mesesDuracion) {
+      const date = calcularVencimientoFinal(
+        vencimiento.fechaElaboracion,
+        vencimiento.mesesDuracion
+      )
+      setCalculatedDate(date)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.producto || form.neto <= 0) return
+    if (!form.producto || form.tipo === '' || Number(form.costoNetoUnitario) <= 0) return
 
-    const result = await submitInvoice({
+    const fechaVencimiento =
+      vencimiento.modo === 'fecha'
+        ? vencimiento.fechaVencimiento
+        : calculatedDate
+
+    const costoNeto = Number(form.costoNetoUnitario)
+    const iva = Math.round(costoNeto * 0.19 * form.cantidad)
+    const total = costoNeto * form.cantidad + iva
+
+    const result = await registrarLote({
+      codigoBarras: form.codigoBarras || '',
       producto: form.producto,
       cantidad: form.cantidad,
-      neto: form.neto,
-      iva: form.iva,
-      total: form.total,
-      fechaVencimiento: form.fechaVencimiento,
-      fechaElaboracion: new Date().toISOString().split('T')[0],
-      mesesVidaUtil: 0,
+      fechaVencimiento,
+      fechaElaboracion: vencimiento.fechaElaboracion,
+      mesesDuracion:
+        vencimiento.modo === 'calcular' ? vencimiento.mesesDuracion : 0,
+      costoNetoUnitario: costoNeto,
+      ivaCredito: iva,
+      totalFactura: total,
+      linkImagen: form.linkImagen,
+      tipo: form.tipo,
     })
 
     setStatus(result.success ? 'success' : 'error')
@@ -286,22 +158,32 @@ function InvoiceForm() {
 
     if (result.success) {
       setForm({
+        tipo: '',
         producto: '',
+        detalle: '',
         cantidad: 1,
-        neto: 0,
-        iva: 0,
-        total: 0,
-        fechaVencimiento: '',
+        costoNetoUnitario: '',
+        linkImagen: '',
       })
+      setVencimiento({
+        modo: 'fecha',
+        fechaVencimiento: '',
+        fechaElaboracion: '',
+        mesesDuracion: 6,
+      })
+      setCalculatedDate('')
       setTimeout(() => setStatus('idle'), 3000)
     }
   }
 
+  const ivaCredito = Math.round(Number(form.costoNetoUnitario || 0) * 0.19 * form.cantidad)
+  const totalFactura = Number(form.costoNetoUnitario || 0) * form.cantidad + ivaCredito
+
   return (
     <div className="card space-y-6">
       <h2 className="text-2xl font-bold flex items-center gap-2">
-        <FileText className="w-7 h-7 text-rosa-intenso" />
-        Ingreso de Factura
+        <Package className="w-7 h-7 text-rosa-intenso" />
+        Ingreso Individual
       </h2>
 
       {status === 'success' && (
@@ -320,159 +202,346 @@ function InvoiceForm() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="label-field">Producto</label>
+          <label className="label-field">Tipo de Producto *</label>
+          <select
+            value={form.tipo}
+            onChange={(e) => setForm((prev) => ({ ...prev, tipo: e.target.value }))}
+            className="input-field"
+            required
+          >
+            <option value="">Seleccionar tipo...</option>
+            {TIPOS_PRODUCTO.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="label-field">Nombre del Producto *</label>
           <input
             type="text"
             value={form.producto}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, producto: e.target.value }))
-            }
+            onChange={(e) => setForm((prev) => ({ ...prev, producto: e.target.value }))}
             className="input-field"
-            placeholder="Nombre del producto..."
+            placeholder="Ej: Vienesa Frankfurt"
             required
           />
         </div>
 
         <div>
-          <label className="label-field">Cantidad</label>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() =>
-                setForm((prev) => ({
-                  ...prev,
-                  cantidad: Math.max(1, prev.cantidad - 1),
-                }))
-              }
-              className="w-14 h-14 bg-lavanda rounded-xl text-2xl font-bold hover:bg-purple-400 transition-colors"
-            >
-              <Minus className="w-6 h-6 mx-auto" />
-            </button>
-            <input
-              type="number"
-              min="1"
-              value={form.cantidad}
-              onChange={(e) =>
-                setForm((prev) => ({
-                  ...prev,
-                  cantidad: Number(e.target.value),
-                }))
-              }
-              className="input-field text-center w-20"
-            />
-            <button
-              type="button"
-              onClick={() =>
-                setForm((prev) => ({ ...prev, cantidad: prev.cantidad + 1 }))
-              }
-              className="w-14 h-14 bg-lavanda rounded-xl text-2xl font-bold hover:bg-purple-400 transition-colors"
-            >
-              <Plus className="w-6 h-6 mx-auto" />
-            </button>
-          </div>
+          <label className="label-field">Detalle Extra (opcional)</label>
+          <input
+            type="text"
+            value={form.detalle}
+            onChange={(e) => setForm((prev) => ({ ...prev, detalle: e.target.value }))}
+            className="input-field"
+            placeholder="Ej: Marca Super, Pack x10..."
+          />
+        </div>
+
+        <div>
+          <label className="label-field">Cantidad *</label>
+          <input
+            type="number"
+            min="1"
+            value={form.cantidad}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, cantidad: Number(e.target.value) }))
+            }
+            className="input-field"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="label-field">Costo Neto Unitario ($) *</label>
+          <input
+            type="number"
+            min="0"
+            value={form.costoNetoUnitario}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, costoNetoUnitario: e.target.value }))
+            }
+            className="input-field"
+            placeholder="Precio sin IVA de cada unidad..."
+            required
+          />
         </div>
 
         <div className="card bg-lavanda/10 border-2 border-lavanda">
-          <div className="flex items-center gap-2 mb-3">
-            <Calculator className="w-5 h-5 text-lavanda" />
-            <h3 className="font-bold text-lg">Desglose de Precios</h3>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <label className="label-field">Valor Neto ($)</label>
-              <input
-                type="number"
-                value={form.neto || ''}
-                onChange={(e) => handleNetoChange(Number(e.target.value))}
-                className="input-field"
-                placeholder="Ingrese valor neto..."
-                required
-              />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 bg-white rounded-xl">
+              <p className="text-sm text-gray-500">IVA Crédito (19%)</p>
+              <p className="text-xl font-bold text-lavanda">
+                ${ivaCredito.toLocaleString('es-CL')}
+              </p>
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-3 bg-white rounded-xl">
-                <p className="text-sm text-gray-500">IVA (19%)</p>
-                <p className="text-xl font-bold text-lavanda">
-                  ${form.iva.toLocaleString('es-CL')}
-                </p>
-              </div>
-              <div className="p-3 bg-rosa-intenso/10 rounded-xl">
-                <p className="text-sm text-gray-500">Total</p>
-                <p className="text-xl font-bold text-rosa-intenso">
-                  ${form.total.toLocaleString('es-CL')}
-                </p>
-              </div>
+            <div className="p-3 bg-rosa-intenso/10 rounded-xl">
+              <p className="text-sm text-gray-500">Total Factura</p>
+              <p className="text-xl font-bold text-rosa-intenso">
+                ${totalFactura.toLocaleString('es-CL')}
+              </p>
             </div>
           </div>
         </div>
 
         <div>
-          <label className="label-field">Fecha de Vencimiento</label>
+          <label className="label-field">Link de Imagen (opcional)</label>
           <input
-            type="date"
-            value={form.fechaVencimiento}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                fechaVencimiento: e.target.value,
-              }))
-            }
+            type="url"
+            value={form.linkImagen}
+            onChange={(e) => setForm((prev) => ({ ...prev, linkImagen: e.target.value }))}
             className="input-field"
+            placeholder="https://drive.google.com/file/d/..."
           />
         </div>
 
+        <div className="card bg-pastel border-2 border-pink-200">
+          <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
+            <Calendar className="w-5 h-5" />
+            Fecha de Vencimiento
+          </h3>
+
+          <div className="flex gap-2 mb-4">
+            <button
+              type="button"
+              onClick={() => setVencimiento((prev) => ({ ...prev, modo: 'fecha' }))}
+              className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
+                vencimiento.modo === 'fecha'
+                  ? 'bg-rosa-intenso text-white'
+                  : 'bg-white border-2 border-lavanda'
+              }`}
+            >
+              Tiene fecha
+            </button>
+            <button
+              type="button"
+              onClick={() => setVencimiento((prev) => ({ ...prev, modo: 'calcular' }))}
+              className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
+                vencimiento.modo === 'calcular'
+                  ? 'bg-rosa-intenso text-white'
+                  : 'bg-white border-2 border-lavanda'
+              }`}
+            >
+              No tiene fecha
+            </button>
+          </div>
+
+          {vencimiento.modo === 'fecha' ? (
+            <div>
+              <label className="label-field">Fecha de Vencimiento</label>
+              <input
+                type="date"
+                value={vencimiento.fechaVencimiento}
+                onChange={(e) =>
+                  setVencimiento((prev) => ({
+                    ...prev,
+                    fechaVencimiento: e.target.value,
+                  }))
+                }
+                className="input-field"
+                required
+              />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <label className="label-field">Fecha de Elaboración</label>
+                <input
+                  type="date"
+                  value={vencimiento.fechaElaboracion}
+                  onChange={(e) =>
+                    setVencimiento((prev) => ({
+                      ...prev,
+                      fechaElaboracion: e.target.value,
+                    }))
+                  }
+                  className="input-field"
+                  required
+                />
+              </div>
+              <div>
+                <label className="label-field">
+                  Consumir antes de: {vencimiento.mesesDuracion} meses
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="60"
+                  value={vencimiento.mesesDuracion}
+                  onChange={(e) =>
+                    setVencimiento((prev) => ({
+                      ...prev,
+                      mesesDuracion: Number(e.target.value),
+                    }))
+                  }
+                  className="w-full accent-rosa-intenso"
+                />
+                <div className="flex justify-between text-sm text-gray-500 mt-1">
+                  <span>1 mes</span>
+                  <span>60 meses</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCalcVencimiento}
+                className="btn-secondary w-full"
+              >
+                Calcular Vencimiento
+              </button>
+              {calculatedDate && (
+                <div className="card bg-white border-2 border-rosa-intenso text-center">
+                  <p className="text-sm text-gray-500">
+                    Consumir antes de:
+                  </p>
+                  <p className="text-2xl font-extrabold text-rosa-intenso">
+                    {new Date(calculatedDate + 'T12:00:00').toLocaleDateString(
+                      'es-CL',
+                      { year: 'numeric', month: 'long', day: 'numeric' }
+                    )}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <button type="submit" className="btn-primary w-full py-5 text-xl">
-          Registrar Lote
+          Registrar Producto
         </button>
       </form>
     </div>
   )
 }
 
-function ExpiryCalculator() {
-  const [form, setForm] = useState({
-    producto: '',
+function FormularioFactura() {
+  const [items, setItems] = useState<LoteItem[]>([
+    {
+      id: '1',
+      codigoBarras: '',
+      producto: '',
+      tipo: '',
+      detalle: '',
+      cantidad: 1,
+      fechaVencimiento: '',
+      fechaElaboracion: '',
+      mesesDuracion: 6,
+      costoNetoUnitario: 0,
+      linkImagen: '',
+    },
+  ])
+  const [vencimientoModo, setVencimientoModo] = useState<'igual' | 'individual'>('igual')
+  const [vencimientoIgual, setVencimientoIgual] = useState({
+    modo: 'fecha' as 'fecha' | 'calcular',
+    fechaVencimiento: '',
     fechaElaboracion: '',
-    meses: 12,
+    mesesDuracion: 6,
   })
-  const [calculatedDate, setCalculatedDate] = useState('')
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
 
-  const calculateExpiry = () => {
-    if (!form.fechaElaboracion || !form.meses) return
-
-    const elaboration = new Date(form.fechaElaboracion)
-    elaboration.setMonth(elaboration.getMonth() + form.meses)
-
-    const year = elaboration.getFullYear()
-    const month = String(elaboration.getMonth() + 1).padStart(2, '0')
-    const day = String(elaboration.getDate()).padStart(2, '0')
-
-    setCalculatedDate(`${year}-${month}-${day}`)
+  const updateItem = (id: string, field: keyof LoteItem, value: unknown) => {
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    )
   }
+
+  const addItem = () => {
+    setItems((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        codigoBarras: '',
+        producto: '',
+        tipo: '',
+        detalle: '',
+        cantidad: 1,
+        fechaVencimiento: '',
+        fechaElaboracion: '',
+        mesesDuracion: 6,
+        costoNetoUnitario: 0,
+        linkImagen: '',
+      },
+    ])
+  }
+
+  const removeItem = (id: string) => {
+    if (items.length > 1) {
+      setItems((prev) => prev.filter((item) => item.id !== id))
+    }
+  }
+
+  const granTotal = items.reduce((sum, item) => {
+    const neto = item.costoNetoUnitario * item.cantidad
+    const iva = Math.round(neto * 0.19)
+    return sum + neto + iva
+  }, 0)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!calculatedDate || !form.producto) return
 
-    const result = await submitInvoice({
-      producto: form.producto,
-      cantidad: 1,
-      neto: 0,
-      iva: 0,
-      total: 0,
-      fechaVencimiento: calculatedDate,
-      fechaElaboracion: form.fechaElaboracion,
-      mesesVidaUtil: form.meses,
+    const validItems = items.filter((i) => i.producto && i.tipo && i.costoNetoUnitario > 0)
+    if (validItems.length === 0) return
+
+    const lotes = validItems.map((item) => {
+      let fechaVencimiento = ''
+      let fechaElaboracion = ''
+      let mesesDuracion = 0
+
+      if (vencimientoModo === 'igual') {
+        if (vencimientoIgual.modo === 'fecha') {
+          fechaVencimiento = vencimientoIgual.fechaVencimiento
+        } else {
+          fechaElaboracion = vencimientoIgual.fechaElaboracion
+          mesesDuracion = vencimientoIgual.mesesDuracion
+          fechaVencimiento = calcularVencimientoFinal(fechaElaboracion, mesesDuracion)
+        }
+      } else {
+        fechaVencimiento = item.fechaVencimiento
+        fechaElaboracion = item.fechaElaboracion
+        mesesDuracion = item.mesesDuracion
+      }
+
+      const neto = item.costoNetoUnitario * item.cantidad
+      const iva = Math.round(neto * 0.19)
+
+      return {
+        codigoBarras: item.codigoBarras || '',
+        producto: item.producto,
+        cantidad: item.cantidad,
+        fechaVencimiento,
+        fechaElaboracion,
+        mesesDuracion,
+        costoNetoUnitario: item.costoNetoUnitario,
+        ivaCredito: iva,
+        totalFactura: neto + iva,
+        linkImagen: item.linkImagen,
+        tipo: item.tipo,
+      }
     })
 
+    const result = await registrarLotesMultiple(lotes)
     setStatus(result.success ? 'success' : 'error')
     setMessage(result.message)
 
     if (result.success) {
+      setItems([
+        {
+          id: '1',
+          codigoBarras: '',
+          producto: '',
+          tipo: '',
+          detalle: '',
+          cantidad: 1,
+          fechaVencimiento: '',
+          fechaElaboracion: '',
+          mesesDuracion: 6,
+          costoNetoUnitario: 0,
+          linkImagen: '',
+        },
+      ])
       setTimeout(() => setStatus('idle'), 3000)
     }
   }
@@ -480,14 +549,9 @@ function ExpiryCalculator() {
   return (
     <div className="card space-y-6">
       <h2 className="text-2xl font-bold flex items-center gap-2">
-        <Calendar className="w-7 h-7 text-rosa-intenso" />
-        Calculadora de Vencimiento
+        <FileText className="w-7 h-7 text-rosa-intenso" />
+        Ingreso por Factura
       </h2>
-
-      <p className="text-gray-600">
-        Si el producto no tiene fecha de vencimiento, calcula automáticamente
-        usando la fecha de elaboración y los meses de vida útil.
-      </p>
 
       {status === 'success' && (
         <div className="p-4 bg-green-100 border border-exito rounded-xl flex items-center gap-2">
@@ -496,90 +560,232 @@ function ExpiryCalculator() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="label-field">Producto</label>
-          <input
-            type="text"
-            value={form.producto}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, producto: e.target.value }))
-            }
-            className="input-field"
-            placeholder="Nombre del producto..."
-            required
-          />
+      {status === 'error' && (
+        <div className="p-4 bg-red-100 border border-error rounded-xl flex items-center gap-2">
+          <AlertTriangle className="w-6 h-6 text-error" />
+          <span className="font-semibold text-red-800">{message}</span>
         </div>
+      )}
 
-        <div>
-          <label className="label-field">Fecha de Elaboración</label>
-          <input
-            type="date"
-            value={form.fechaElaboracion}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                fechaElaboracion: e.target.value,
-              }))
-            }
-            className="input-field"
-            required
-          />
+      <div>
+        <label className="label-field">¿Los productos vencen igual?</label>
+        <div className="flex gap-2 mb-3">
+          <button
+            type="button"
+            onClick={() => setVencimientoModo('igual')}
+            className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
+              vencimientoModo === 'igual'
+                ? 'bg-rosa-intenso text-white'
+                : 'bg-white border-2 border-lavanda'
+            }`}
+          >
+            Todos la misma fecha
+          </button>
+          <button
+            type="button"
+            onClick={() => setVencimientoModo('individual')}
+            className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
+              vencimientoModo === 'individual'
+                ? 'bg-rosa-intenso text-white'
+                : 'bg-white border-2 border-lavanda'
+            }`}
+          >
+            Cada uno distinto
+          </button>
         </div>
+      </div>
 
-        <div>
-          <label className="label-field">
-            Meses de Vida Útil: {form.meses}
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="60"
-            value={form.meses}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, meses: Number(e.target.value) }))
-            }
-            className="w-full accent-rosa-intenso"
-          />
-          <div className="flex justify-between text-sm text-gray-500 mt-1">
-            <span>1 mes</span>
-            <span>60 meses (5 años)</span>
+      {vencimientoModo === 'igual' && (
+        <div className="card bg-pastel border-2 border-pink-200">
+          <h3 className="font-bold mb-3">Vencimiento para todos los productos</h3>
+          <div className="flex gap-2 mb-3">
+            <button
+              type="button"
+              onClick={() => setVencimientoIgual((prev) => ({ ...prev, modo: 'fecha' }))}
+              className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
+                vencimientoIgual.modo === 'fecha'
+                  ? 'bg-rosa-intenso text-white'
+                  : 'bg-white border-2 border-lavanda'
+              }`}
+            >
+              Tiene fecha
+            </button>
+            <button
+              type="button"
+              onClick={() => setVencimientoIgual((prev) => ({ ...prev, modo: 'calcular' }))}
+              className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
+                vencimientoIgual.modo === 'calcular'
+                  ? 'bg-rosa-intenso text-white'
+                  : 'bg-white border-2 border-lavanda'
+              }`}
+            >
+              No tiene fecha
+            </button>
           </div>
+          {vencimientoIgual.modo === 'fecha' ? (
+            <input
+              type="date"
+              value={vencimientoIgual.fechaVencimiento}
+              onChange={(e) =>
+                setVencimientoIgual((prev) => ({
+                  ...prev,
+                  fechaVencimiento: e.target.value,
+                }))
+              }
+              className="input-field"
+            />
+          ) : (
+            <div className="space-y-2">
+              <input
+                type="date"
+                value={vencimientoIgual.fechaElaboracion}
+                onChange={(e) =>
+                  setVencimientoIgual((prev) => ({
+                    ...prev,
+                    fechaElaboracion: e.target.value,
+                  }))
+                }
+                className="input-field"
+                placeholder="Fecha de elaboración"
+              />
+              <label className="text-sm text-gray-500">
+                Meses: {vencimientoIgual.mesesDuracion}
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="60"
+                value={vencimientoIgual.mesesDuracion}
+                onChange={(e) =>
+                  setVencimientoIgual((prev) => ({
+                    ...prev,
+                    mesesDuracion: Number(e.target.value),
+                  }))
+                }
+                className="w-full accent-rosa-intenso"
+              />
+            </div>
+          )}
         </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {items.map((item, idx) => (
+          <div key={item.id} className="card border-2 border-gray-200">
+            <div className="flex items-center justify-between mb-3">
+              <span className="font-bold text-lg">Producto {idx + 1}</span>
+              {items.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeItem(item.id)}
+                  className="p-2 text-error hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="label-field">Tipo *</label>
+                <select
+                  value={item.tipo}
+                  onChange={(e) => updateItem(item.id, 'tipo', e.target.value)}
+                  className="input-field"
+                  required
+                >
+                  <option value="">Seleccionar...</option>
+                  {TIPOS_PRODUCTO.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="label-field">Nombre *</label>
+                <input
+                  type="text"
+                  value={item.producto}
+                  onChange={(e) => updateItem(item.id, 'producto', e.target.value)}
+                  className="input-field"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="label-field">Detalle (opcional)</label>
+                <input
+                  type="text"
+                  value={item.detalle}
+                  onChange={(e) => updateItem(item.id, 'detalle', e.target.value)}
+                  className="input-field"
+                />
+              </div>
+
+              <div>
+                <label className="label-field">Cantidad *</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={item.cantidad}
+                  onChange={(e) => updateItem(item.id, 'cantidad', Number(e.target.value))}
+                  className="input-field"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="label-field">Costo Neto Unitario ($) *</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={item.costoNetoUnitario || ''}
+                  onChange={(e) =>
+                    updateItem(item.id, 'costoNetoUnitario', Number(e.target.value))
+                  }
+                  className="input-field"
+                  required
+                />
+              </div>
+
+              {vencimientoModo === 'individual' && (
+                <div>
+                  <label className="label-field">Fecha Vencimiento *</label>
+                  <input
+                    type="date"
+                    value={item.fechaVencimiento}
+                    onChange={(e) =>
+                      updateItem(item.id, 'fechaVencimiento', e.target.value)
+                    }
+                    className="input-field"
+                    required
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
 
         <button
           type="button"
-          onClick={calculateExpiry}
-          className="btn-secondary w-full"
+          onClick={addItem}
+          className="btn-secondary w-full flex items-center justify-center gap-2"
         >
-          <Calculator className="w-5 h-5 inline mr-2" />
-          Calcular Fecha de Vencimiento
+          <Plus className="w-5 h-5" />
+          Agregar otro producto a la factura
         </button>
 
-        {calculatedDate && (
-          <div className="card bg-pastel border-2 border-rosa-intenso text-center">
-            <p className="text-sm text-gray-500 mb-1">
-              Fecha de Vencimiento Calculada
-            </p>
-            <p className="text-3xl font-extrabold text-rosa-intenso">
-              {new Date(calculatedDate + 'T12:00:00').toLocaleDateString(
-                'es-CL',
-                {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                }
-              )}
-            </p>
-          </div>
-        )}
+        <div className="card bg-rosa-intenso/10 border-2 border-rosa-intenso text-center">
+          <p className="text-sm text-gray-500">Total Factura (con IVA)</p>
+          <p className="text-4xl font-extrabold text-rosa-intenso">
+            ${granTotal.toLocaleString('es-CL')}
+          </p>
+        </div>
 
-        <button
-          type="submit"
-          disabled={!calculatedDate}
-          className="btn-primary w-full py-5 text-xl"
-        >
-          Registrar con Fecha Calculada
+        <button type="submit" className="btn-primary w-full py-5 text-xl">
+          Registrar Todos los Productos
         </button>
       </form>
     </div>

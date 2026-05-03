@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { fetchProducts, type Producto } from '@/lib/api'
+import { fetchMaestroProductos, type Producto } from '@/lib/api'
 import ProductCard from '@/components/ProductCard'
 import { Search, Loader2, PackageX } from 'lucide-react'
 
@@ -14,7 +14,7 @@ export default function CatalogoPage() {
   useEffect(() => {
     const load = async () => {
       setLoading(true)
-      const data = await fetchProducts()
+      const data = await fetchMaestroProductos()
       setProducts(data)
       setLoading(false)
     }
@@ -58,7 +58,7 @@ export default function CatalogoPage() {
           />
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="flex gap-2 overflow-x-auto pb-2">
           {categories.map((cat) => (
             <button
               key={cat}
@@ -91,9 +91,8 @@ export default function CatalogoPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
           {filtered.map((product) => (
             <ProductCard
-              key={product.id || product.nombre}
+              key={product.codigoBarras || product.nombre}
               nombre={product.nombre}
-              precio={product.precio}
               categoria={product.categoria}
               imagen={product.imagen}
             />

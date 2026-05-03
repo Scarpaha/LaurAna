@@ -7,14 +7,12 @@ import { DEFAULT_IMAGE } from '@/lib/constants'
 
 interface ProductCardProps {
   nombre: string
-  precio: number
   categoria: string
   imagen: string
 }
 
 export default function ProductCard({
   nombre,
-  precio,
   categoria,
   imagen,
 }: ProductCardProps) {
@@ -35,9 +33,6 @@ export default function ProductCard({
       </div>
       <span className="badge badge-warning mb-2">{categoria}</span>
       <h3 className="font-bold text-lg text-carbon truncate">{nombre}</h3>
-      <p className="text-rosa-intenso font-extrabold text-2xl mt-1">
-        ${precio.toLocaleString('es-CL')}
-      </p>
     </div>
   )
 }
