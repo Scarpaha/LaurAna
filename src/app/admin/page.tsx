@@ -152,6 +152,7 @@ function FormularioIndividual() {
       totalFactura: total,
       linkImagen: form.linkImagen,
       tipo: form.tipo,
+      detalle: form.detalle,
     })
 
     setStatus(result.success ? 'success' : 'error')
@@ -532,6 +533,7 @@ function FormularioFactura() {
         totalFactura: neto + iva,
         linkImagen: item.linkImagen,
         tipo: item.tipo,
+        detalle: item.detalle,
       }
     })
 

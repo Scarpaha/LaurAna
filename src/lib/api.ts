@@ -30,6 +30,8 @@ export interface PanelPapa {
 export interface LoteInventario {
   codigoBarras: string
   producto: string
+  tipo: string
+  detalle: string
   cantidad: number
   fechaVencimiento: string
   fechaElaboracion: string
@@ -192,6 +194,8 @@ export async function fetchInventarioLotes(): Promise<LoteInventario[]> {
           item.codigoBarras || item['Código de Barras'] || item.codigo_barras
         ),
         producto: str(item.producto || item['Producto'] || item.nombre),
+        tipo: str(item.tipo || item['Tipo'] || item.categoria || ''),
+        detalle: str(item.detalle || item['Detalle'] || item.detalle_extra || ''),
         cantidad: num(item.cantidad || item['Cantidad']),
         fechaVencimiento: str(
           item.fechaVencimiento || item['Fecha Vencimiento'] || item.fecha_vencimiento || ''
@@ -230,6 +234,8 @@ export async function fetchInventarioLotes(): Promise<LoteInventario[]> {
 export async function registrarLote(lote: {
   codigoBarras: string
   producto: string
+  tipo: string
+  detalle: string
   cantidad: number
   fechaVencimiento: string
   fechaElaboracion: string
@@ -238,7 +244,6 @@ export async function registrarLote(lote: {
   ivaCredito: number
   totalFactura: number
   linkImagen: string
-  tipo: string
 }): Promise<{ success: boolean; message: string }> {
   try {
     const response = await fetch(SCRIPT_URL, {
@@ -263,6 +268,8 @@ export async function registrarLote(lote: {
 export async function registrarLotesMultiple(lotes: Array<{
   codigoBarras: string
   producto: string
+  tipo: string
+  detalle: string
   cantidad: number
   fechaVencimiento: string
   fechaElaboracion: string
@@ -271,7 +278,6 @@ export async function registrarLotesMultiple(lotes: Array<{
   ivaCredito: number
   totalFactura: number
   linkImagen: string
-  tipo: string
 }>): Promise<{ success: boolean; message: string }> {
   try {
     const response = await fetch(SCRIPT_URL, {
