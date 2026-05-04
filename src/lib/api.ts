@@ -65,24 +65,47 @@ const num = (val: unknown): number => {
 
 function parseFlexibleDate(raw: unknown): string {
   if (!raw) return ''
+  
+  // Handle Date objects from Sheets
   if (raw instanceof Date) {
     const d = raw as Date
     if (isNaN(d.getTime())) return ''
-    return d.toISOString().split('T')[0]
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
   }
+  
   const s = String(raw).trim()
   if (!s) return ''
 
+  // Handle ISO format like "2026-06-08T04:00:00.000Z"
+  if (s.includes('T') && s.includes('Z')) {
+    const d = new Date(s)
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear()
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+  }
+
+  // Try standard ISO first
   const d = new Date(s + 'T12:00:00')
-  if (!isNaN(d.getTime())) return d.toISOString().split('T')[0]
+  if (!isNaN(d.getTime())) {
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
 
   const parts = s.split(/[-/.\s]/)
   
   if (parts.length === 3) {
     const combos = [
-      [2, 1, 0],
-      [1, 0, 2],
-      [0, 1, 2],
+      [2, 1, 0],  // DD-MM-YYYY (most common in Chile)
+      [1, 0, 2],  // MM-DD-YYYY
+      [0, 1, 2],  // YYYY-MM-DD
     ]
     for (const [di, mi, yi] of combos) {
       let day = Number(parts[di])

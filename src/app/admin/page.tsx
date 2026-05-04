@@ -151,7 +151,7 @@ function FormularioIndividual() {
 
     const precioCliente = Number(form.precioCliente || 0)
 
-    await registrarProducto({
+    const prodResult = await registrarProducto({
       codigoBarras: form.codigoBarras || '',
       nombre: form.producto,
       categoria: form.tipo,
@@ -159,25 +159,14 @@ function FormularioIndividual() {
       imagen: form.linkImagen,
     })
 
-    const result = await registrarLote({
-      codigoBarras: form.codigoBarras || '',
-      producto: form.producto,
-      tipo: form.tipo,
-      detalle: form.detalle,
-      cantidad: form.cantidad,
-      fechaVencimiento,
-      fechaElaboracion: vencimiento.fechaElaboracion,
-      mesesDuracion: vencimiento.modo === 'calcular' ? vencimiento.mesesDuracion : 0,
-      costoNetoUnitario: totals.netoUnitario,
-      ivaCredito: totals.iva,
-      totalFactura: 0,
-      linkImagen: form.linkImagen,
-    })
+    // No registramos en Inventario_Lotes para ingresos individuales (stock existente)
+    // Solo registramos en Maestro_Productos para el catálogo
+    // Si necesitas registrar el lote físico, usa "Por Factura" en lugar de "Individual"
 
-    setStatus(result.success ? 'success' : 'error')
-    setMessage(result.message)
+    setStatus(prodResult.success ? 'success' : 'error')
+    setMessage(prodResult.message)
 
-    if (result.success) {
+    if (prodResult.success) {
       setForm({
         codigoBarras: '',
         tipo: '',
