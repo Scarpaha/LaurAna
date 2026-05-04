@@ -77,18 +77,19 @@ function parseFlexibleDate(raw: unknown): string {
   if (!isNaN(d.getTime())) return d.toISOString().split('T')[0]
 
   const parts = s.split(/[-/.\s]/)
+  
   if (parts.length === 3) {
     const combos = [
-      [0, 1, 2],
-      [1, 0, 2],
       [2, 1, 0],
+      [1, 0, 2],
+      [0, 1, 2],
     ]
     for (const [di, mi, yi] of combos) {
       let day = Number(parts[di])
       let month = Number(parts[mi])
       let year = Number(parts[yi])
       if (year < 100) year += 2000
-      if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 2000) {
+      if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 2000 && year <= 2100) {
         const test = new Date(year, month - 1, day)
         if (!isNaN(test.getTime()) && test.getMonth() === month - 1 && test.getDate() === day) {
           return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
@@ -96,6 +97,18 @@ function parseFlexibleDate(raw: unknown): string {
       }
     }
   }
+  
+  if (parts.length === 2) {
+    const yearPart = parts.find(p => p.length === 4 && Number(p) >= 2000 && Number(p) <= 2100)
+    if (yearPart) {
+      return `${yearPart}-01-01`
+    }
+  }
+  
+  if (parts.length === 1 && Number(parts[0]) >= 2000 && Number(parts[0]) <= 2100) {
+    return `${parts[0]}-01-01`
+  }
+  
   return s
 }
 
@@ -140,14 +153,24 @@ async function writeRow(sheetName: string, values: unknown[]): Promise<{ success
 
 export async function fetchMaestroProductos(): Promise<Producto[]> {
   const rows = await readSheet('Maestro_Productos')
-  return rows.map((item) => ({
-    codigoBarras: str(item['Código de Barras'] || item.id || ''),
-    nombre: str(item['Nombre del Producto'] || item.nombre || ''),
-    categoria: str(item['Categoría'] || 'Sin categoría'),
-    mesesDuracionEstandar: num(item['Meses Duración Estándar']),
-    precioCliente: num(item['Precio al Cliente'] || item['Precio Venta'] || item.precio || 0),
-    imagen: convertDriveImageUrl(str(item['Link de la Imagen'] || '')),
-  }))
+  return rows.map((item) => {
+    const keys = Object.keys(item)
+    const findPrice = () => {
+      const priceKeys = ['Precio al Cliente', 'Precio Cliente', 'Precio Venta', 'Precio', 'precio', 'PRECIO', 'precioCliente', 'PrecioVenta']
+      for (const k of priceKeys) {
+        if (item[k] !== undefined) return num(item[k])
+      }
+      return 0
+    }
+    return {
+      codigoBarras: str(item['Código de Barras'] || item.id || item.codigoBarras || ''),
+      nombre: str(item['Nombre del Producto'] || item.nombre || item.Nombre || item.producto || ''),
+      categoria: str(item['Categoría'] || item.categoria || item.Categoria || 'Sin categoría'),
+      mesesDuracionEstandar: num(item['Meses Duración Estándar'] || item.mesesDuracion || 0),
+      precioCliente: findPrice(),
+      imagen: convertDriveImageUrl(str(item['Link de la Imagen'] || item.imagen || item.Imagen || '')),
+    }
+  })
 }
 
 export async function fetchCajaDiaria(): Promise<VentaDiaria[]> {

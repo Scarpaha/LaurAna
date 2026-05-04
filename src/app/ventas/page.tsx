@@ -165,18 +165,18 @@ export default function VentasPage() {
       </div>
 
       {panel && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="card border-l-4 border-lavanda py-3 px-4">
-            <p className="text-xs text-gray-500 font-semibold">Inversión</p>
-            <p className="text-xl font-extrabold text-carbon">${panel.inversionTotal.toLocaleString('es-CL')}</p>
+        <div className="flex flex-wrap gap-2 justify-center print:grid print:grid-cols-3 print:gap-2">
+          <div className="card border-l-4 border-lavanda p-2 min-w-[100px] flex-1 max-w-[140px] print:max-w-none">
+            <p className="text-[10px] text-gray-500 font-semibold leading-tight">Inversión</p>
+            <p className="text-sm font-bold text-carbon leading-tight">${panel.inversionTotal.toLocaleString('es-CL')}</p>
           </div>
-          <div className="card border-l-4 border-aviso py-3 px-4">
-            <p className="text-xs text-gray-500 font-semibold">Meta</p>
-            <p className="text-xl font-extrabold text-carbon">${panel.metaVenta.toLocaleString('es-CL')}</p>
+          <div className="card border-l-4 border-aviso p-2 min-w-[100px] flex-1 max-w-[140px] print:max-w-none">
+            <p className="text-[10px] text-gray-500 font-semibold leading-tight">Meta</p>
+            <p className="text-sm font-bold text-carbon leading-tight">${panel.metaVenta.toLocaleString('es-CL')}</p>
           </div>
-          <div className="card border-l-4 border-exito py-3 px-4">
-            <p className="text-xs text-gray-500 font-semibold">Venta Real</p>
-            <p className="text-xl font-extrabold text-exito">${panel.ventaReal.toLocaleString('es-CL')}</p>
+          <div className="card border-l-4 border-exito p-2 min-w-[100px] flex-1 max-w-[140px] print:max-w-none">
+            <p className="text-[10px] text-gray-500 font-semibold leading-tight">Venta Real</p>
+            <p className="text-sm font-bold text-exito leading-tight">${panel.ventaReal.toLocaleString('es-CL')}</p>
           </div>
         </div>
       )}
