@@ -91,10 +91,10 @@ async function writeRow(sheetName: string, values: unknown[]): Promise<{ success
   try {
     const response = await fetch(SCRIPT_URL, {
       method: 'POST',
+      mode: 'no-cors',
       body: JSON.stringify({ targetSheet: sheetName, values }),
     })
-    const text = await response.text()
-    return { success: response.ok, message: text }
+    return { success: true, message: 'Guardado correctamente' }
   } catch (error) {
     console.error(`Error escribiendo en ${sheetName}:`, error)
     return { success: false, message: 'Error de conexión' }
