@@ -108,7 +108,7 @@ export default function VencimientosPage() {
                     <div className="flex items-center gap-4 mt-2 text-sm">
                       <span className="flex items-center gap-1">
                         <Calendar className="w-4 h-4" />
-                        Vence: {new Date(lote.fechaUsar + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' })}
+                        Vence: {lote.fechaUsar.includes('-12-31') ? lote.fechaUsar.slice(0, 4) : new Date(lote.fechaUsar + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                       </span>
                       <span>Cantidad: {lote.cantidad}</span>
                     </div>

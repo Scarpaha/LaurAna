@@ -94,6 +94,7 @@ export default function CatalogoPage() {
               key={product.codigoBarras || product.nombre}
               nombre={product.nombre}
               categoria={product.categoria}
+              precioCliente={product.precioCliente}
               imagen={product.imagen}
             />
           ))}

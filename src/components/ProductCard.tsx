@@ -8,12 +8,14 @@ import { DEFAULT_IMAGE } from '@/lib/constants'
 interface ProductCardProps {
   nombre: string
   categoria: string
+  precioCliente: number
   imagen: string
 }
 
 export default function ProductCard({
   nombre,
   categoria,
+  precioCliente,
   imagen,
 }: ProductCardProps) {
   const [imgError, setImgError] = useState(false)
@@ -32,7 +34,10 @@ export default function ProductCard({
         />
       </div>
       <span className="badge badge-warning mb-2">{categoria}</span>
-      <h3 className="font-bold text-lg text-carbon truncate">{nombre}</h3>
+      <h3 className="font-bold text-base text-carbon truncate">{nombre}</h3>
+      {precioCliente > 0 && (
+        <p className="text-lg font-extrabold text-rosa-intenso mt-1">${precioCliente.toLocaleString('es-CL')}</p>
+      )}
     </div>
   )
 }

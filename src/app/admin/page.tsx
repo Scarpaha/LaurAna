@@ -4,6 +4,7 @@ import { useState } from 'react'
 import {
   registrarLote,
   registrarLotesMultiple,
+  registrarProducto,
   calcularVencimientoFinal,
 } from '@/lib/api'
 import {
@@ -19,6 +20,7 @@ import {
 
 type AdminTab = 'individual' | 'factura'
 type PriceMode = 'neto' | 'total'
+type DateMode = 'fecha' | 'calcular' | 'anio'
 
 interface LoteItem {
   id: string
@@ -30,6 +32,8 @@ interface LoteItem {
   fechaVencimiento: string
   fechaElaboracion: string
   mesesDuracion: number
+  anioVencimiento: string
+  dateMode: DateMode
   precioUnitario: number
   priceMode: PriceMode
   linkImagen: string
@@ -106,14 +110,16 @@ function FormularioIndividual() {
     detalle: '',
     cantidad: 1,
     precioUnitario: '',
+    precioCliente: '',
     priceMode: 'neto' as PriceMode,
     linkImagen: '',
   })
   const [vencimiento, setVencimiento] = useState({
-    modo: 'fecha' as 'fecha' | 'calcular',
+    modo: 'fecha' as DateMode,
     fechaVencimiento: '',
     fechaElaboracion: '',
     mesesDuracion: 6,
+    anioVencimiento: '',
   })
   const [calculatedDate, setCalculatedDate] = useState('')
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
@@ -122,14 +128,36 @@ function FormularioIndividual() {
   const price = Number(form.precioUnitario || 0)
   const totals = calcTotals(price, form.cantidad, form.priceMode)
 
+  const formatDateDisplay = (dateStr: string): string => {
+    if (!dateStr) return ''
+    const parts = dateStr.split('-')
+    if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`
+    return dateStr
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.producto || !form.tipo || price <= 0) return
 
-    const fechaVencimiento =
-      vencimiento.modo === 'fecha'
-        ? vencimiento.fechaVencimiento
-        : calculatedDate
+    let fechaVencimiento = ''
+    if (vencimiento.modo === 'fecha') {
+      fechaVencimiento = vencimiento.fechaVencimiento
+    } else if (vencimiento.modo === 'calcular') {
+      fechaVencimiento = calculatedDate
+    } else if (vencimiento.modo === 'anio') {
+      const y = vencimiento.anioVencimiento
+      fechaVencimiento = y ? `${y}-12-31` : ''
+    }
+
+    const precioCliente = Number(form.precioCliente || 0)
+
+    await registrarProducto({
+      codigoBarras: form.codigoBarras || '',
+      nombre: form.producto,
+      categoria: form.tipo,
+      precioCliente: precioCliente || price,
+      imagen: form.linkImagen,
+    })
 
     const result = await registrarLote({
       codigoBarras: form.codigoBarras || '',
@@ -142,7 +170,7 @@ function FormularioIndividual() {
       mesesDuracion: vencimiento.modo === 'calcular' ? vencimiento.mesesDuracion : 0,
       costoNetoUnitario: totals.netoUnitario,
       ivaCredito: totals.iva,
-      totalFactura: totals.total,
+      totalFactura: 0,
       linkImagen: form.linkImagen,
     })
 
@@ -157,10 +185,11 @@ function FormularioIndividual() {
         detalle: '',
         cantidad: 1,
         precioUnitario: '',
+        precioCliente: '',
         priceMode: 'neto',
         linkImagen: '',
       })
-      setVencimiento({ modo: 'fecha', fechaVencimiento: '', fechaElaboracion: '', mesesDuracion: 6 })
+      setVencimiento({ modo: 'fecha', fechaVencimiento: '', fechaElaboracion: '', mesesDuracion: 6, anioVencimiento: '' })
       setCalculatedDate('')
       setTimeout(() => setStatus('idle'), 3000)
     }
@@ -287,6 +316,19 @@ function FormularioIndividual() {
           />
         </div>
 
+        <div>
+          <label className="label-field">Precio al Cliente ($) *</label>
+          <input
+            type="number"
+            min="0"
+            value={form.precioCliente}
+            onChange={(e) => setForm((p) => ({ ...p, precioCliente: e.target.value }))}
+            className="input-field"
+            placeholder="Precio de venta al público"
+            required
+          />
+        </div>
+
         <div className="card bg-lavanda/10 border-2 border-lavanda">
           <div className="grid grid-cols-3 gap-3">
             <div className="p-3 bg-white rounded-xl">
@@ -324,28 +366,39 @@ function FormularioIndividual() {
             <button
               type="button"
               onClick={() => setVencimiento((p) => ({ ...p, modo: 'fecha' }))}
-              className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
+              className={`flex-1 py-2 rounded-lg font-semibold transition-all text-sm ${
                 vencimiento.modo === 'fecha'
                   ? 'bg-rosa-intenso text-white'
                   : 'bg-white border-2 border-lavanda'
               }`}
             >
-              Tiene fecha
+              Fecha exacta
             </button>
             <button
               type="button"
               onClick={() => setVencimiento((p) => ({ ...p, modo: 'calcular' }))}
-              className={`flex-1 py-2 rounded-lg font-semibold transition-all ${
+              className={`flex-1 py-2 rounded-lg font-semibold transition-all text-sm ${
                 vencimiento.modo === 'calcular'
                   ? 'bg-rosa-intenso text-white'
                   : 'bg-white border-2 border-lavanda'
               }`}
             >
-              No tiene fecha
+              Calcular
+            </button>
+            <button
+              type="button"
+              onClick={() => setVencimiento((p) => ({ ...p, modo: 'anio' }))}
+              className={`flex-1 py-2 rounded-lg font-semibold transition-all text-sm ${
+                vencimiento.modo === 'anio'
+                  ? 'bg-rosa-intenso text-white'
+                  : 'bg-white border-2 border-lavanda'
+              }`}
+            >
+              Solo año
             </button>
           </div>
 
-          {vencimiento.modo === 'fecha' ? (
+          {vencimiento.modo === 'fecha' && (
             <div>
               <label className="label-field">Fecha de Vencimiento</label>
               <input
@@ -355,8 +408,28 @@ function FormularioIndividual() {
                 className="input-field"
                 required
               />
+              <p className="text-xs text-gray-400 mt-1">Ej: 15-06-2026</p>
             </div>
-          ) : (
+          )}
+
+          {vencimiento.modo === 'anio' && (
+            <div>
+              <label className="label-field">Año de Vencimiento</label>
+              <input
+                type="number"
+                min="2024"
+                max="2035"
+                value={vencimiento.anioVencimiento}
+                onChange={(e) => setVencimiento((p) => ({ ...p, anioVencimiento: e.target.value }))}
+                className="input-field"
+                placeholder="Ej: 2028"
+                required
+              />
+              <p className="text-xs text-gray-400 mt-1">Ideal para conservas y productos de larga duración</p>
+            </div>
+          )}
+
+          {vencimiento.modo === 'calcular' && (
             <div className="space-y-3">
               <div>
                 <label className="label-field">Fecha de Elaboración</label>
@@ -370,7 +443,7 @@ function FormularioIndividual() {
               </div>
               <div>
                 <label className="label-field">
-                  Consumir antes de: {vencimiento.mesesDuracion} meses
+                  Duración: {vencimiento.mesesDuracion} meses
                 </label>
                 <input
                   type="range"
@@ -419,6 +492,7 @@ function FormularioFactura() {
     {
       id: '1', codigoBarras: '', producto: '', tipo: '', detalle: '',
       cantidad: 1, fechaVencimiento: '', fechaElaboracion: '', mesesDuracion: 6,
+      anioVencimiento: '', dateMode: 'fecha',
       precioUnitario: 0, priceMode: 'neto', linkImagen: '',
     },
   ])
@@ -442,6 +516,7 @@ function FormularioFactura() {
       {
         id: Date.now().toString(), codigoBarras: '', producto: '', tipo: '', detalle: '',
         cantidad: 1, fechaVencimiento: '', fechaElaboracion: '', mesesDuracion: 6,
+        anioVencimiento: '', dateMode: 'fecha',
         precioUnitario: 0, priceMode: 'neto', linkImagen: '',
       },
     ])
@@ -503,6 +578,7 @@ function FormularioFactura() {
         {
           id: '1', codigoBarras: '', producto: '', tipo: '', detalle: '',
           cantidad: 1, fechaVencimiento: '', fechaElaboracion: '', mesesDuracion: 6,
+          anioVencimiento: '', dateMode: 'fecha',
           precioUnitario: 0, priceMode: 'neto', linkImagen: '',
         },
       ])

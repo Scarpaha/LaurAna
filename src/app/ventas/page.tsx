@@ -34,7 +34,7 @@ export default function VentasPage() {
   const [mode, setMode] = useState<Mode>('boleta')
   const [input, setInput] = useState('')
   const [toast, setToast] = useState<string | null>(null)
-  
+
   const [editingDate, setEditingDate] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ ventaBoleta: 0, ventaSinBoleta: 0, consumoPropio: 0 })
 
@@ -117,7 +117,7 @@ export default function VentasPage() {
   }
 
   const handleDelete = async (fecha: string) => {
-    if (!confirm(`¿Eliminar la venta del ${fecha}?`)) return
+    if (!confirm(`¿Eliminar la venta del ${fmtDate(fecha)}?`)) return
     const result = await deleteCajaDiaria(fecha)
     if (result.success) {
       showToast('Eliminado correctamente ✔')
@@ -165,33 +165,18 @@ export default function VentasPage() {
       </div>
 
       {panel && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="card border-l-4 border-lavanda">
-            <div className="flex items-center gap-3">
-              <DollarSign className="w-7 h-7 text-lavanda" />
-              <div>
-                <p className="text-sm text-gray-500 font-semibold">Inversión Total</p>
-                <p className="text-2xl font-extrabold text-carbon">${panel.inversionTotal.toLocaleString('es-CL')}</p>
-              </div>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="card border-l-4 border-lavanda py-3 px-4">
+            <p className="text-xs text-gray-500 font-semibold">Inversión</p>
+            <p className="text-xl font-extrabold text-carbon">${panel.inversionTotal.toLocaleString('es-CL')}</p>
           </div>
-          <div className="card border-l-4 border-aviso">
-            <div className="flex items-center gap-3">
-              <Target className="w-7 h-7 text-yellow-600" />
-              <div>
-                <p className="text-sm text-gray-500 font-semibold">Meta de Venta</p>
-                <p className="text-2xl font-extrabold text-carbon">${panel.metaVenta.toLocaleString('es-CL')}</p>
-              </div>
-            </div>
+          <div className="card border-l-4 border-aviso py-3 px-4">
+            <p className="text-xs text-gray-500 font-semibold">Meta</p>
+            <p className="text-xl font-extrabold text-carbon">${panel.metaVenta.toLocaleString('es-CL')}</p>
           </div>
-          <div className="card border-l-4 border-exito">
-            <div className="flex items-center gap-3">
-              <TrendingUp className="w-7 h-7 text-exito" />
-              <div>
-                <p className="text-sm text-gray-500 font-semibold">Venta Real</p>
-                <p className="text-2xl font-extrabold text-exito">${panel.ventaReal.toLocaleString('es-CL')}</p>
-              </div>
-            </div>
+          <div className="card border-l-4 border-exito py-3 px-4">
+            <p className="text-xs text-gray-500 font-semibold">Venta Real</p>
+            <p className="text-xl font-extrabold text-exito">${panel.ventaReal.toLocaleString('es-CL')}</p>
           </div>
         </div>
       )}
@@ -201,11 +186,11 @@ export default function VentasPage() {
           <div className="flex justify-between items-center mb-2">
             <h3 className="font-bold text-lg">Progreso - {panel.mesActual || 'Este mes'}</h3>
             <span className="text-sm text-gray-500">
-              Debe vender: <span className="font-bold text-rosa-intenso">${panel.metaVenta.toLocaleString('es-CL')}</span> | Ha vendido: <span className="font-bold text-exito">${panel.ventaReal.toLocaleString('es-CL')}</span>
+              Debe: <span className="font-bold text-rosa-intenso">${panel.metaVenta.toLocaleString('es-CL')}</span> | Vendido: <span className="font-bold text-exito">${panel.ventaReal.toLocaleString('es-CL')}</span>
             </span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-8">
-            <div className={`h-8 rounded-full font-bold text-sm flex items-center justify-center ${progressPercent >= 100 ? 'bg-exito' : progressPercent >= 70 ? 'bg-aviso text-carbon' : 'bg-rosa-intenso'}`} style={{ width: `${Math.max(progressPercent, 5)}%` }}>
+          <div className="w-full bg-gray-200 rounded-full h-6">
+            <div className={`h-6 rounded-full font-bold text-xs flex items-center justify-center ${progressPercent >= 100 ? 'bg-exito' : progressPercent >= 70 ? 'bg-aviso text-carbon' : 'bg-rosa-intenso'}`} style={{ width: `${Math.max(progressPercent, 5)}%` }}>
               {progressPercent.toFixed(0)}%
             </div>
           </div>
@@ -237,10 +222,10 @@ export default function VentasPage() {
 
         <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto mb-4">
           {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((d) => (
-            <button key={d} type="button" onClick={() => handleKey(d)} className="h-16 text-2xl font-bold bg-white border-2 border-lavanda rounded-xl hover:bg-lavanda/30 active:bg-lavanda transition-colors">{d}</button>
+            <button key={d} type="button" onClick={() => handleKey(d)} className="h-14 text-2xl font-bold bg-white border-2 border-lavanda rounded-xl hover:bg-lavanda/30 active:bg-lavanda transition-colors">{d}</button>
           ))}
-          <button type="button" onClick={() => handleKey('0')} className="h-16 text-2xl font-bold bg-white border-2 border-lavanda rounded-xl hover:bg-lavanda/30 active:bg-lavanda transition-colors col-span-2">0</button>
-          <button type="button" onClick={() => handleKey('⌫')} className="h-16 text-lg font-bold bg-red-100 border-2 border-error rounded-xl hover:bg-red-200 transition-colors">⌫</button>
+          <button type="button" onClick={() => handleKey('0')} className="h-14 text-2xl font-bold bg-white border-2 border-lavanda rounded-xl hover:bg-lavanda/30 active:bg-lavanda transition-colors col-span-2">0</button>
+          <button type="button" onClick={() => handleKey('⌫')} className="h-14 text-lg font-bold bg-red-100 border-2 border-error rounded-xl hover:bg-red-200 transition-colors">⌫</button>
         </div>
 
         <div className="flex gap-2 mb-4">
@@ -249,8 +234,8 @@ export default function VentasPage() {
         </div>
 
         <div className="flex justify-between items-center text-sm text-gray-500 px-2">
-          <span>Total día seleccionado: <strong className="text-carbon">${totalDia.toLocaleString('es-CL')}</strong></span>
-          <span>Total mes: <strong className="text-rosa-intenso">${totalMes.toLocaleString('es-CL')}</strong></span>
+          <span>Día: <strong className="text-carbon">${totalDia.toLocaleString('es-CL')}</strong></span>
+          <span>Mes: <strong className="text-rosa-intenso">${totalMes.toLocaleString('es-CL')}</strong></span>
         </div>
       </div>
 
@@ -260,13 +245,13 @@ export default function VentasPage() {
 
       {ventas.length > 0 && (
         <div className="card">
-          <h2 className="text-2xl font-bold mb-4">Historial de Ventas</h2>
+          <h2 className="text-2xl font-bold mb-4">Historial</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-lavanda/20">
                   <th className="p-3 text-left rounded-tl-xl">Fecha</th>
-                  <th className="p-3 text-right">Con Boleta</th>
+                  <th className="p-3 text-right">Boleta</th>
                   <th className="p-3 text-right">Sin Boleta</th>
                   <th className="p-3 text-right">Consumo</th>
                   <th className="p-3 text-right rounded-tr-xl">Total</th>
