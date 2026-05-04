@@ -62,7 +62,7 @@ const num = (val: unknown): number => {
   return isNaN(n) ? 0 : n
 }
 
-async function readSheet(sheetName: string): Promise<unknown[][]> {
+async function readSheet(sheetName: string): Promise<Record<string, unknown>[]> {
   try {
     const response = await fetch(`${SCRIPT_URL}?sheet=${encodeURIComponent(sheetName)}`, {
       cache: 'no-store',
