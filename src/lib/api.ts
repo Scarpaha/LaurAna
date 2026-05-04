@@ -330,19 +330,20 @@ export async function registrarLote(lote: {
   totalFactura: number
   linkImagen: string
 }): Promise<{ success: boolean; message: string }> {
+  // Orden según columnas: Código de Barras|Producto|Cantidad|Fecha Vencimiento|Fecha Elaboración|Meses Duración|Vencimiento Final|Costo Neto Unitario|IVA Crédito (19%)|Total Factura Lote|Estado|Link de la Imagen
   return writeRow('Inventario_Lotes', [
-    lote.codigoBarras,
-    lote.producto,
-    lote.cantidad,
-    lote.fechaVencimiento,
-    lote.fechaElaboracion,
-    lote.mesesDuracion,
-    lote.fechaVencimiento,
-    lote.costoNetoUnitario,
-    lote.ivaCredito,
-    lote.totalFactura,
-    'Activo',
-    lote.linkImagen,
+    lote.codigoBarras,      // 1: Código de Barras
+    lote.producto,            // 2: Producto
+    lote.cantidad,            // 3: Cantidad
+    lote.fechaVencimiento,    // 4: Fecha Vencimiento
+    lote.fechaElaboracion,    // 5: Fecha Elaboración
+    lote.mesesDuracion,       // 6: Meses Duración
+    lote.fechaVencimiento,    // 7: Vencimiento Final (igual a Fecha Vencimiento)
+    lote.costoNetoUnitario,   // 8: Costo Neto Unitario
+    lote.ivaCredito,         // 9: IVA Crédito (19%)
+    lote.totalFactura,        // 10: Total Factura Lote
+    'Activo',                 // 11: Estado
+    lote.linkImagen,         // 12: Link de la Imagen
   ])
 }
 
