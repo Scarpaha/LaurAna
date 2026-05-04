@@ -14,6 +14,16 @@ import { Target, DollarSign, TrendingUp, Loader2, Printer, Edit2, Trash2, Check,
 
 type Mode = 'boleta' | 'sinboleta' | 'consumo'
 
+function fmtDate(raw: string): string {
+  if (!raw) return ''
+  const d = new Date(raw + 'T12:00:00')
+  if (isNaN(d.getTime())) return raw
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yyyy = d.getFullYear()
+  return `${dd}-${mm}-${yyyy}`
+}
+
 export default function VentasPage() {
   const [panel, setPanel] = useState<PanelPapa | null>(null)
   const [ventas, setVentas] = useState<VentaDiaria[]>([])
@@ -268,7 +278,7 @@ export default function VentasPage() {
                   const isEditing = editingDate === v.fecha
                   return (
                     <tr key={v.fecha} className={`border-b border-gray-100 ${isEditing ? 'bg-yellow-50' : ''}`}>
-                      <td className="p-3 font-semibold">{new Date(v.fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
+                      <td className="p-3 font-semibold">{fmtDate(v.fecha)}</td>
                       {isEditing ? (
                         <>
                           <td className="p-2"><input type="number" value={editForm.ventaBoleta} onChange={(e) => setEditForm((p) => ({ ...p, ventaBoleta: Number(e.target.value) }))} className="w-24 text-right border rounded p-1 text-sm" /></td>
