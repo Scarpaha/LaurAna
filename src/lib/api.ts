@@ -62,71 +62,77 @@ const num = (val: unknown): number => {
   return isNaN(n) ? 0 : n
 }
 
-export async function fetchMaestroProductos(): Promise<Producto[]> {
+async function readSheet(sheetName: string): Promise<unknown[][]> {
   try {
-    const response = await fetch(`${SCRIPT_URL}?action=getMaestroProductos`, {
+    const response = await fetch(`${SCRIPT_URL}?sheet=${encodeURIComponent(sheetName)}`, {
       cache: 'no-store',
     })
-    if (!response.ok) throw new Error('Error al cargar productos')
+    if (!response.ok) throw new Error(`Error al cargar ${sheetName}`)
     const data = await response.json()
-    if (data.success && data.data) {
-      return data.data.map((item: Record<string, unknown>) => ({
-        codigoBarras: str(
-          item.codigoBarras || item['Código de Barras'] || item.codigo_barras || item.id
-        ),
-        nombre: str(
-          item.nombre || item['Nombre del Producto'] || item.nombreProducto || item.nombre_producto
-        ),
-        categoria: str(
-          item.categoria || item['Categoría'] || item.categoria || 'Sin categoría'
-        ),
-        mesesDuracionEstandar: num(
-          item.mesesDuracionEstandar ||
-            item['Meses Duración Estándar'] ||
-            item.meses_duracion ||
-            item.meses_duracion_estandar
-        ),
-        imagen: convertDriveImageUrl(
-          str(
-            item.imagen ||
-              item['Link de la Imagen'] ||
-              item.linkImagen ||
-              item.link_imagen ||
-              item.foto
-          )
-        ),
-      }))
+    if (Array.isArray(data) && data.length > 1) {
+      const headers = data[0]
+      const rows = data.slice(1)
+      return rows.map((row) => {
+        const obj: Record<string, unknown> = {}
+        headers.forEach((h: string, i: number) => {
+          obj[h] = row[i] ?? ''
+        })
+        return obj
+      })
     }
     return []
   } catch (error) {
-    console.error('Error fetching productos:', error)
+    console.error(`Error leyendo hoja ${sheetName}:`, error)
     return []
   }
 }
 
-export async function fetchCajaDiaria(): Promise<VentaDiaria[]> {
+async function writeRow(sheetName: string, values: unknown[]): Promise<{ success: boolean; message: string }> {
   try {
-    const response = await fetch(`${SCRIPT_URL}?action=getCajaDiaria`, {
-      cache: 'no-store',
+    const response = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ targetSheet: sheetName, values }),
     })
-    if (!response.ok) throw new Error('Error al cargar caja diaria')
-    const data = await response.json()
-    if (data.success && data.data) {
-      return data.data.map((item: Record<string, unknown>) => ({
-        fecha: str(item.fecha || item['Fecha']),
-        ventaBoleta: num(item.ventaBoleta || item['Venta con Boleta'] || item.venta_con_boleta),
-        ventaSinBoleta: num(
-          item.ventaSinBoleta || item['Venta sin Boleta'] || item.venta_sin_boleta
-        ),
-        consumoPropio: num(item.consumoPropio || item['Consumo Propio'] || item.consumo_propio),
-        totalDia: num(item.totalDia || item['Total Día'] || item.total_dia),
-      }))
-    }
-    return []
+    const text = await response.text()
+    return { success: response.ok, message: text }
   } catch (error) {
-    console.error('Error fetching caja diaria:', error)
-    return []
+    console.error(`Error escribiendo en ${sheetName}:`, error)
+    return { success: false, message: 'Error de conexión' }
   }
+}
+
+export async function fetchMaestroProductos(): Promise<Producto[]> {
+  const rows = await readSheet('Maestro_Productos')
+  return rows.map((item) => ({
+    codigoBarras: str(item['Código de Barras'] || item.id || ''),
+    nombre: str(item['Nombre del Producto'] || item.nombre || ''),
+    categoria: str(item['Categoría'] || 'Sin categoría'),
+    mesesDuracionEstandar: num(item['Meses Duración Estándar']),
+    imagen: convertDriveImageUrl(str(item['Link de la Imagen'] || '')),
+  }))
+}
+
+export async function fetchCajaDiaria(): Promise<VentaDiaria[]> {
+  const rows = await readSheet('Caja_Diaria')
+  return rows.map((item) => {
+    const fechaRaw = item['Fecha']
+    let fecha = ''
+    if (fechaRaw instanceof Date) {
+      fecha = fechaRaw.toISOString().split('T')[0]
+    } else if (typeof fechaRaw === 'string') {
+      fecha = fechaRaw
+    }
+    const vb = num(item['Venta con Boleta'])
+    const vsb = num(item['Venta sin Boleta'])
+    const cp = num(item['Consumo Propio'])
+    return {
+      fecha,
+      ventaBoleta: vb,
+      ventaSinBoleta: vsb,
+      consumoPropio: cp,
+      totalDia: vb + vsb + cp,
+    }
+  }).filter((v) => v.fecha)
 }
 
 export async function registrarVentaDiaria(venta: {
@@ -135,24 +141,14 @@ export async function registrarVentaDiaria(venta: {
   ventaSinBoleta: number
   consumoPropio: number
 }): Promise<{ success: boolean; message: string }> {
-  try {
-    const response = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'registrarVentaDiaria',
-        ...venta,
-      }),
-    })
-    const data = await response.json()
-    return {
-      success: data.success ?? true,
-      message: data.message ?? 'Venta registrada correctamente',
-    }
-  } catch (error) {
-    console.error('Error registrando venta:', error)
-    return { success: false, message: 'Error al registrar la venta' }
-  }
+  const total = venta.ventaBoleta + venta.ventaSinBoleta + venta.consumoPropio
+  return writeRow('Caja_Diaria', [
+    venta.fecha,
+    venta.ventaBoleta,
+    venta.ventaSinBoleta,
+    venta.consumoPropio,
+    total,
+  ])
 }
 
 export async function updateCajaDiaria(venta: {
@@ -161,121 +157,65 @@ export async function updateCajaDiaria(venta: {
   ventaSinBoleta: number
   consumoPropio: number
 }): Promise<{ success: boolean; message: string }> {
-  try {
-    const response = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'updateCajaDiaria',
-        ...venta,
-      }),
-    })
-    const data = await response.json()
-    return {
-      success: data.success ?? true,
-      message: data.message ?? 'Venta actualizada correctamente',
-    }
-  } catch (error) {
-    console.error('Error actualizando venta:', error)
-    return { success: false, message: 'Error al actualizar la venta' }
-  }
+  const total = venta.ventaBoleta + venta.ventaSinBoleta + venta.consumoPropio
+  return writeRow('Caja_Diaria', [
+    venta.fecha,
+    venta.ventaBoleta,
+    venta.ventaSinBoleta,
+    venta.consumoPropio,
+    total,
+  ])
 }
 
-export async function deleteCajaDiaria(fecha: string): Promise<{ success: boolean; message: string }> {
-  try {
-    const response = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'deleteCajaDiaria',
-        fecha,
-      }),
-    })
-    const data = await response.json()
-    return {
-      success: data.success ?? true,
-      message: data.message ?? 'Venta eliminada correctamente',
-    }
-  } catch (error) {
-    console.error('Error eliminando venta:', error)
-    return { success: false, message: 'Error al eliminar la venta' }
-  }
+export async function deleteCajaDiaria(_fecha: string): Promise<{ success: boolean; message: string }> {
+  return { success: false, message: 'Eliminar requiere Apps Script con lógica de borrado. Por ahora, edita y pon todo en 0.' }
 }
 
 export async function fetchPanelPapa(): Promise<PanelPapa | null> {
-  try {
-    const response = await fetch(`${SCRIPT_URL}?action=getPanelPapa`, {
-      cache: 'no-store',
-    })
-    if (!response.ok) throw new Error('Error al cargar panel')
-    const data = await response.json()
-    if (data.success && data.data) {
-      const d = data.data
-      return {
-        mesActual: str(d.mesActual || d['MES ACTUAL'] || d.mes_actual || ''),
-        inversionTotal: num(
-          d.inversionTotal || d['INVERSIÓN TOTAL (Facturas + IVA)'] || d.inversion_total
-        ),
-        metaVenta: num(d.metaVenta || d['META DE VENTA (1.2x)'] || d.meta_venta),
-        ventaReal: num(d.ventaReal || d['VENTA REAL ACUMULADA'] || d.venta_real),
-        diferencia: num(d.diferencia || d['DIFERENCIA / UTILIDAD'] || d.utilidad),
-      }
-    }
-    return null
-  } catch (error) {
-    console.error('Error fetching panel papa:', error)
-    return null
+  const rows = await readSheet('Panel_Papa')
+  if (rows.length === 0) return null
+  const d = rows[0]
+  return {
+    mesActual: str(d['MES ACTUAL'] || ''),
+    inversionTotal: num(d['INVERSIÓN TOTAL (Facturas + IVA)']),
+    metaVenta: num(d['META DE VENTA (1.2x)']),
+    ventaReal: num(d['VENTA REAL ACUMULADA']),
+    diferencia: num(d['DIFERENCIA / UTILIDAD']),
   }
 }
 
 export async function fetchInventarioLotes(): Promise<LoteInventario[]> {
-  try {
-    const response = await fetch(`${SCRIPT_URL}?action=getInventarioLotes`, {
-      cache: 'no-store',
-    })
-    if (!response.ok) throw new Error('Error al cargar inventario')
-    const data = await response.json()
-    if (data.success && data.data) {
-      return data.data.map((item: Record<string, unknown>) => ({
-        codigoBarras: str(
-          item.codigoBarras || item['Código de Barras'] || item.codigo_barras
-        ),
-        producto: str(item.producto || item['Producto'] || item.nombre),
-        tipo: str(item.tipo || item['Tipo'] || item.categoria || ''),
-        detalle: str(item.detalle || item['Detalle'] || item.detalle_extra || ''),
-        cantidad: num(item.cantidad || item['Cantidad']),
-        fechaVencimiento: str(
-          item.fechaVencimiento || item['Fecha Vencimiento'] || item.fecha_vencimiento || ''
-        ),
-        fechaElaboracion: str(
-          item.fechaElaboracion || item['Fecha Elaboración'] || item.fecha_elaboracion || ''
-        ),
-        mesesDuracion: num(
-          item.mesesDuracion || item['Meses Duración'] || item.meses_duracion
-        ),
-        vencimientoFinal: str(
-          item.vencimientoFinal ||
-            item['Vencimiento Final'] ||
-            item.vencimiento_final ||
-            item.fechaVencimiento ||
-            ''
-        ),
-        costoNetoUnitario: num(
-          item.costoNetoUnitario || item['Costo Neto Unitario'] || item.costo_neto_unitario
-        ),
-        ivaCredito: num(item.ivaCredito || item['IVA Crédito (19%)'] || item.iva_credito),
-        totalFactura: num(item.totalFactura || item['Total Factura Lote'] || item.total_factura),
-        estado: str(item.estado || item['Estado'] || 'Activo'),
-        linkImagen: convertDriveImageUrl(
-          str(item.linkImagen || item['Link de la Imagen'] || item.link_imagen || '')
-        ),
-      }))
+  const rows = await readSheet('Inventario_Lotes')
+  return rows.map((item) => {
+    const fechaVencimiento = item['Fecha Vencimiento'] instanceof Date
+      ? (item['Fecha Vencimiento'] as Date).toISOString().split('T')[0]
+      : str(item['Fecha Vencimiento'])
+    const fechaElaboracion = item['Fecha Elaboración'] instanceof Date
+      ? (item['Fecha Elaboración'] as Date).toISOString().split('T')[0]
+      : str(item['Fecha Elaboración'])
+    const vencimientoFinal = item['Vencimiento Final'] instanceof Date
+      ? (item['Vencimiento Final'] as Date).toISOString().split('T')[0]
+      : (item['Fecha Vencimiento'] instanceof Date
+        ? (item['Fecha Vencimiento'] as Date).toISOString().split('T')[0]
+        : str(item['Vencimiento Final'] || item['Fecha Vencimiento']))
+
+    return {
+      codigoBarras: str(item['Código de Barras']),
+      producto: str(item['Producto']),
+      tipo: str(item['Tipo'] || item['Categoría'] || ''),
+      detalle: str(item['Detalle'] || ''),
+      cantidad: num(item['Cantidad']),
+      fechaVencimiento,
+      fechaElaboracion,
+      mesesDuracion: num(item['Meses Duración']),
+      vencimientoFinal,
+      costoNetoUnitario: num(item['Costo Neto Unitario']),
+      ivaCredito: num(item['IVA Crédito (19%)']),
+      totalFactura: num(item['Total Factura Lote']),
+      estado: str(item['Estado'] || 'Activo'),
+      linkImagen: convertDriveImageUrl(str(item['Link de la Imagen'])),
     }
-    return []
-  } catch (error) {
-    console.error('Error fetching inventario:', error)
-    return []
-  }
+  }).filter((l) => l.producto)
 }
 
 export async function registrarLote(lote: {
@@ -292,24 +232,20 @@ export async function registrarLote(lote: {
   totalFactura: number
   linkImagen: string
 }): Promise<{ success: boolean; message: string }> {
-  try {
-    const response = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'registrarLote',
-        ...lote,
-      }),
-    })
-    const data = await response.json()
-    return {
-      success: data.success ?? true,
-      message: data.message ?? 'Lote registrado correctamente',
-    }
-  } catch (error) {
-    console.error('Error registrando lote:', error)
-    return { success: false, message: 'Error al registrar el lote' }
-  }
+  return writeRow('Inventario_Lotes', [
+    lote.codigoBarras,
+    lote.producto,
+    lote.cantidad,
+    lote.fechaVencimiento,
+    lote.fechaElaboracion,
+    lote.mesesDuracion,
+    lote.fechaVencimiento,
+    lote.costoNetoUnitario,
+    lote.ivaCredito,
+    lote.totalFactura,
+    'Activo',
+    lote.linkImagen,
+  ])
 }
 
 export async function registrarLotesMultiple(lotes: Array<{
@@ -326,24 +262,10 @@ export async function registrarLotesMultiple(lotes: Array<{
   totalFactura: number
   linkImagen: string
 }>): Promise<{ success: boolean; message: string }> {
-  try {
-    const response = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'registrarLotesMultiple',
-        lotes,
-      }),
-    })
-    const data = await response.json()
-    return {
-      success: data.success ?? true,
-      message: data.message ?? 'Lotes registrados correctamente',
-    }
-  } catch (error) {
-    console.error('Error registrando lotes:', error)
-    return { success: false, message: 'Error al registrar los lotes' }
+  for (const lote of lotes) {
+    await registrarLote(lote)
   }
+  return { success: true, message: `${lotes.length} productos registrados` }
 }
 
 export function calcularVencimientoFinal(
