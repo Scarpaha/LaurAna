@@ -38,14 +38,17 @@ async function main() {
     const codigoBarras = String(r['Código de Barras'] || r['CodigoBarras'] || '')
     const nombre = String(r['Nombre del Producto'] || r['Nombre'] || r.Producto || '')
     const categoria = String(r['Categoría'] || r['Categoria'] || r.Categoria || r.Tipo || '')
+    const mesesDuracion = Number(r['Meses Duración Estándar'] || r['MesesDuracion'] || 0)
     const precioCliente = Number(r['Precio al Cliente'] || r['Precio'] || r.Precio || 0)
     const imagen = String(r['Link de la Imagen'] || r['LinkImagen'] || r.Imagen || '')
 
     if (!nombre) continue
 
+    console.log('Importando:', nombre, 'Precio:', precioCliente)
+    
     // Solo registramos en Maestro_Productos para el catálogo
     // No escribimos en Inventario_Lotes para evitar afectar inversión
-    await writeRow('Maestro_Productos', [codigoBarras, nombre, categoria, 0, precioCliente, imagen])
+    await writeRow('Maestro_Productos', [codigoBarras, nombre, categoria, mesesDuracion, precioCliente, imagen])
   }
   console.log('Import completed')
 }

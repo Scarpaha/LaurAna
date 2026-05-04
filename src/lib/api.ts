@@ -176,24 +176,34 @@ async function writeRow(sheetName: string, values: unknown[]): Promise<{ success
 
 export async function fetchMaestroProductos(): Promise<Producto[]> {
   const rows = await readSheet('Maestro_Productos')
+  
+  if (rows.length === 0) return []
+  
+  const firstRow = rows[0]
+  const keys = Object.keys(firstRow)
+  
+  // Try to find columns by name or position
+  const findColumn = (names: string[], fallbackIndex: number): unknown => {
+    for (const name of names) {
+      if (firstRow[name] !== undefined) return firstRow[name]
+    }
+    // Fallback to index
+    const values = Object.values(firstRow)
+    if (values.length > fallbackIndex) return values[fallbackIndex]
+    return undefined
+  }
+  
   return rows.map((item) => {
-    const keys = Object.keys(item)
-    const findPrice = () => {
-      const priceKeys = ['Precio al Cliente', 'Precio Cliente', 'Precio Venta', 'Precio', 'precio', 'PRECIO', 'precioCliente', 'PrecioVenta']
-      for (const k of priceKeys) {
-        if (item[k] !== undefined) return num(item[k])
-      }
-      return 0
-    }
+    const values = Object.values(item)
     return {
-      codigoBarras: str(item['Código de Barras'] || item.id || item.codigoBarras || ''),
-      nombre: str(item['Nombre del Producto'] || item.nombre || item.Nombre || item.producto || ''),
-      categoria: str(item['Categoría'] || item.categoria || item.Categoria || 'Sin categoría'),
-      mesesDuracionEstandar: num(item['Meses Duración Estándar'] || item.mesesDuracion || 0),
-      precioCliente: findPrice(),
-      imagen: convertDriveImageUrl(str(item['Link de la Imagen'] || item.imagen || item.Imagen || '')),
+      codigoBarras: str(item['Código de Barras'] || values[0] || ''),
+      nombre: str(item['Nombre del Producto'] || values[1] || ''),
+      categoria: str(item['Categoría'] || values[2] || 'Sin categoría'),
+      mesesDuracionEstandar: num(item['Meses Duración Estándar'] || values[3] || 0),
+      precioCliente: num(item['Precio al Cliente'] || values[4] || 0),
+      imagen: convertDriveImageUrl(str(item['Link de la Imagen'] || values[5] || '')),
     }
-  })
+  }).filter((p) => p.nombre)
 }
 
 export async function fetchCajaDiaria(): Promise<VentaDiaria[]> {
