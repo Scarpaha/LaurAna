@@ -268,7 +268,7 @@ export default function VentasPage() {
                   const isEditing = editingDate === v.fecha
                   return (
                     <tr key={v.fecha} className={`border-b border-gray-100 ${isEditing ? 'bg-yellow-50' : ''}`}>
-                      <td className="p-3 font-semibold">{new Date(v.fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' })}</td>
+                      <td className="p-3 font-semibold">{new Date(v.fecha + 'T12:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: '2-digit' })}</td>
                       {isEditing ? (
                         <>
                           <td className="p-2"><input type="number" value={editForm.ventaBoleta} onChange={(e) => setEditForm((p) => ({ ...p, ventaBoleta: Number(e.target.value) }))} className="w-24 text-right border rounded p-1 text-sm" /></td>

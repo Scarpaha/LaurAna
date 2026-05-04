@@ -117,11 +117,14 @@ export async function fetchCajaDiaria(): Promise<VentaDiaria[]> {
   return rows.map((item) => {
     const fechaRaw = item['Fecha']
     let fecha = ''
-    if (fechaRaw instanceof Date) {
-      fecha = fechaRaw.toISOString().split('T')[0]
-    } else if (typeof fechaRaw === 'string') {
-      fecha = fechaRaw
+    if (fechaRaw) {
+      const d = new Date(String(fechaRaw))
+      if (!isNaN(d.getTime())) {
+        fecha = d.toISOString().split('T')[0]
+      }
     }
+    if (!fecha && typeof fechaRaw === 'string') fecha = fechaRaw.trim()
+    
     const vb = num(item['Venta con Boleta'])
     const vsb = num(item['Venta sin Boleta'])
     const cp = num(item['Consumo Propio'])
