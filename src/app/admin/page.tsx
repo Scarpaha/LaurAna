@@ -5,6 +5,7 @@ import {
   registrarLote,
   registrarLotesMultiple,
   registrarProducto,
+  registrarProductoCompleto,
   calcularVencimientoFinal,
   fetchMaestroProductos,
   fetchInventarioLotes,
@@ -99,11 +100,11 @@ function ListaTodos() {
           merged.push({
             id: `m-${key}`,
             nombre: p.nombre,
-            categoria: p.categoria,
-            tipo: p.categoria,
+            categoria: p.tipo,
+            tipo: p.tipo,
             precioCliente: p.precioCliente,
             cantidad: 0,
-            fechaVencimiento: '',
+            fechaVencimiento: p.vencimientoFinal,
             imagen: p.imagen,
             fuente: 'maestro',
           })
@@ -116,20 +117,20 @@ function ListaTodos() {
           const existing = merged.find((m) => m.nombre.toLowerCase().trim() === key)
           if (existing) {
             existing.cantidad += l.cantidad
-            if (l.vencimientoFinal || l.fechaVencimiento) {
-              existing.fechaVencimiento = l.vencimientoFinal || l.fechaVencimiento
+            if (l.fechaVencimiento) {
+              existing.fechaVencimiento = l.fechaVencimiento
             }
           }
         } else {
           merged.push({
             id: `l-${key}-${l.fechaVencimiento}`,
             nombre: l.producto,
-            categoria: l.tipo,
-            tipo: l.tipo,
+            categoria: '',
+            tipo: '',
             precioCliente: 0,
             cantidad: l.cantidad,
-            fechaVencimiento: l.vencimientoFinal || l.fechaVencimiento,
-            imagen: l.linkImagen,
+            fechaVencimiento: l.fechaVencimiento,
+            imagen: '',
             fuente: 'lote',
           })
           seen.add(key)
@@ -412,45 +413,29 @@ function FormularioIndividual() {
 
     const precioCliente = Number(form.precioCliente || 0)
 
-    const prodResult = await registrarProducto({
-      codigoBarras: '',
+    const result = await registrarProductoCompleto({
       nombre: form.producto,
-      categoria: form.tipo,
+      tipo: form.tipo,
       precioCliente: precioCliente || price,
       imagen: form.linkImagen,
-    })
-
-    if (!prodResult.success) {
-      setStatus('error')
-      setMessage(prodResult.message)
-      return
-    }
-
-    const loteResult = await registrarLote({
-      codigoBarras: '',
-      producto: form.producto,
-      tipo: form.tipo,
-      detalle: form.detalle,
-      cantidad: form.cantidad,
-      fechaVencimiento,
-      fechaElaboracion: vencimiento.fechaElaboracion,
       mesesDuracion: vencimiento.mesesDuracion,
+      fechaVencimiento,
       costoNetoUnitario: form.priceMode === 'neto' ? price : Math.round(price / 1.19),
       ivaCredito: totals.iva,
       totalFactura: totals.total,
-      linkImagen: form.linkImagen,
+      cantidad: form.cantidad,
     })
 
-    if (loteResult.success) {
+    if (result.success) {
       setStatus('success')
-      setMessage('Producto registrado en catálogo y vencimientos ✔')
+      setMessage('Producto registrado en catálogo e inventario ✔')
       setForm({ tipo: '', producto: '', detalle: '', cantidad: 1, precioUnitario: '', precioCliente: '', priceMode: 'neto', linkImagen: '' })
       setVencimiento({ modo: 'fecha', fechaVencimiento: '', fechaElaboracion: '', mesesDuracion: 6, anioVencimiento: '' })
       setFechaParts({ day: '01', month: String(new Date().getMonth() + 1).padStart(2, '0'), year: String(new Date().getFullYear()) })
       setCalculatedDate('')
     } else {
       setStatus('error')
-      setMessage('Producto registrado en catálogo, pero falló en vencimientos')
+      setMessage(result.message)
     }
     setTimeout(() => setStatus('idle'), 4000)
   }
@@ -787,7 +772,7 @@ function FormularioFactura() {
     const valid = items.filter((i) => i.producto && i.tipo && i.precioUnitario > 0)
     if (valid.length === 0) return
 
-    const lotes = valid.map((item) => {
+    const lotesInventario = valid.map((item) => {
       let fechaVencimiento = ''
       let fechaElaboracion = ''
       let mesesDuracion = 0
@@ -806,22 +791,29 @@ function FormularioFactura() {
       }
       const t = calcTotals(item.precioUnitario, item.cantidad, item.priceMode)
       return {
-        codigoBarras: '',
         producto: item.producto,
-        tipo: item.tipo,
-        detalle: item.detalle,
         cantidad: item.cantidad,
         fechaVencimiento,
-        fechaElaboracion,
-        mesesDuracion,
-        costoNetoUnitario: t.netoUnitario,
-        ivaCredito: t.iva,
+        costoNeto: t.netoUnitario,
         totalFactura: t.total,
-        linkImagen: item.linkImagen,
       }
     })
 
-    const result = await registrarLotesMultiple(lotes)
+    for (const item of valid) {
+      const t = calcTotals(item.precioUnitario, item.cantidad, item.priceMode)
+      await registrarProducto({
+        nombre: item.producto,
+        tipo: item.tipo,
+        precioCliente: t.netoUnitario,
+        imagen: item.linkImagen,
+        mesesDuracion: vencimientoModo === 'igual' ? (vencimientoIgual.modo === 'calcular' ? vencimientoIgual.mesesDuracion : 0) : item.mesesDuracion,
+        costoNetoUnitario: t.netoUnitario,
+        ivaCredito: t.iva,
+        totalFactura: t.total,
+      })
+    }
+
+    const result = await registrarLotesMultiple(lotesInventario)
     setStatus(result.success ? 'success' : 'error')
     setMessage(result.message)
     if (result.success) {

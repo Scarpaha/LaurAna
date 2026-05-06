@@ -1,19 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { fetchInventarioLotes, fetchMaestroProductos, eliminarLote, diasParaVencer, type LoteInventario, type Producto } from '@/lib/api'
+import { fetchInventarioLotes, fetchMaestroProductos, eliminarLote, diasParaVencer } from '@/lib/api'
 import { AlertTriangle, Loader2, PackageX, Calendar, Trash2, Minus, Plus } from 'lucide-react'
-
-function calcularDesdeMeses(meses: number): string {
-  const hoy = new Date()
-  hoy.setMonth(hoy.getMonth() + meses)
-  return hoy.toISOString().split('T')[0]
-}
 
 interface VencimientoItem {
   producto: string
   tipo: string
-  detalle: string
   cantidad: number
   fechaUsar: string
   diasParaVencer: number
@@ -37,44 +30,48 @@ export default function VencimientosPage() {
         fetchMaestroProductos(),
       ])
       const merged: VencimientoItem[] = []
+      const seen = new Set<string>()
+
       for (const l of lotes) {
         if (l.estado === 'Eliminado' || l.cantidad <= 0) continue
-        const fechaUsar = l.vencimientoFinal || l.fechaVencimiento
+        const fechaUsar = l.fechaVencimiento
         if (!fechaUsar) continue
         const dias = diasParaVencer(fechaUsar)
+        const key = `${l.producto.toLowerCase().trim()}|${fechaUsar}`
         merged.push({
           producto: l.producto,
-          tipo: l.tipo,
-          detalle: l.detalle,
+          tipo: '',
           cantidad: l.cantidad,
           fechaUsar,
           diasParaVencer: dias,
-          imagen: l.linkImagen,
+          imagen: '',
           fuente: 'lote',
           fechaVencimiento: fechaUsar,
         })
+        seen.add(key)
       }
+
       for (const p of maestro) {
-        const key = p.nombre.toLowerCase().trim()
-        const alreadyInLotes = merged.some((m) => m.producto.toLowerCase().trim() === key && m.fuente === 'lote')
-        if (!alreadyInLotes && p.mesesDuracionEstandar > 0) {
-          const fechaUsar = calcularDesdeMeses(p.mesesDuracionEstandar)
-          if (fechaUsar) {
-            const dias = diasParaVencer(fechaUsar)
-            merged.push({
-              producto: p.nombre,
-              tipo: p.categoria,
-              detalle: '',
-              cantidad: 0,
-              fechaUsar,
-              diasParaVencer: dias,
-              imagen: p.imagen,
-              fuente: 'maestro',
-              fechaVencimiento: fechaUsar,
-            })
-          }
+        if (p.estado === 'Eliminado') continue
+        const fechaUsar = p.vencimientoFinal
+        if (!fechaUsar) continue
+        const dias = diasParaVencer(fechaUsar)
+        const key = `${p.nombre.toLowerCase().trim()}|${fechaUsar}`
+        if (!seen.has(key)) {
+          merged.push({
+            producto: p.nombre,
+            tipo: p.tipo,
+            cantidad: 0,
+            fechaUsar,
+            diasParaVencer: dias,
+            imagen: p.imagen,
+            fuente: 'maestro',
+            fechaVencimiento: fechaUsar,
+          })
+          seen.add(key)
         }
       }
+
       setItems(merged)
       setLoading(false)
     }
@@ -110,42 +107,43 @@ export default function VencimientosPage() {
       const data = await fetchInventarioLotes()
       const maestro = await fetchMaestroProductos()
       const merged: VencimientoItem[] = []
+      const seen = new Set<string>()
       for (const l of data) {
         if (l.estado === 'Eliminado' || l.cantidad <= 0) continue
-        const fechaUsar = l.vencimientoFinal || l.fechaVencimiento
+        const fechaUsar = l.fechaVencimiento
         if (!fechaUsar) continue
         const dias = diasParaVencer(fechaUsar)
+        const sKey = `${l.producto.toLowerCase().trim()}|${fechaUsar}`
         merged.push({
           producto: l.producto,
-          tipo: l.tipo,
-          detalle: l.detalle,
+          tipo: '',
           cantidad: l.cantidad,
           fechaUsar,
           diasParaVencer: dias,
-          imagen: l.linkImagen,
+          imagen: '',
           fuente: 'lote',
           fechaVencimiento: fechaUsar,
         })
+        seen.add(sKey)
       }
       for (const p of maestro) {
-        const key2 = p.nombre.toLowerCase().trim()
-        const alreadyInLotes = merged.some((m) => m.producto.toLowerCase().trim() === key2 && m.fuente === 'lote')
-        if (!alreadyInLotes && p.mesesDuracionEstandar > 0) {
-          const fechaUsar2 = calcularDesdeMeses(p.mesesDuracionEstandar)
-          if (fechaUsar2) {
-            const dias2 = diasParaVencer(fechaUsar2)
-            merged.push({
-              producto: p.nombre,
-              tipo: p.categoria,
-              detalle: '',
-              cantidad: 0,
-              fechaUsar: fechaUsar2,
-              diasParaVencer: dias2,
-              imagen: p.imagen,
-              fuente: 'maestro',
-              fechaVencimiento: fechaUsar2,
-            })
-          }
+        if (p.estado === 'Eliminado') continue
+        const fechaUsar = p.vencimientoFinal
+        if (!fechaUsar) continue
+        const dias = diasParaVencer(fechaUsar)
+        const sKey = `${p.nombre.toLowerCase().trim()}|${fechaUsar}`
+        if (!seen.has(sKey)) {
+          merged.push({
+            producto: p.nombre,
+            tipo: p.tipo,
+            cantidad: 0,
+            fechaUsar,
+            diasParaVencer: dias,
+            imagen: p.imagen,
+            fuente: 'maestro',
+            fechaVencimiento: fechaUsar,
+          })
+          seen.add(sKey)
         }
       }
       setItems(merged)
@@ -231,7 +229,6 @@ export default function VencimientosPage() {
                         <span className="badge bg-lavanda/30 text-carbon">{item.tipo}</span>
                       )}
                     </div>
-                    {item.detalle && <p className="text-sm text-gray-500">{item.detalle}</p>}
                     <div className="flex items-center gap-4 mt-2 text-sm">
                       <span className="flex items-center gap-1">
                         <Calendar className="w-4 h-4" />
@@ -245,7 +242,7 @@ export default function VencimientosPage() {
                           return raw
                         })()}
                       </span>
-                      <span>Cantidad: {item.cantidad}</span>
+                      {item.cantidad > 0 && <span>Stock: {item.cantidad}</span>}
                     </div>
                   </div>
                   <div className="flex flex-col items-center gap-2">

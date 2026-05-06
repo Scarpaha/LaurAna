@@ -23,7 +23,7 @@ export default function CatalogoPage() {
 
   const categories = [
     'Todas',
-    ...Array.from(new Set(products.map((p) => p.categoria))).sort(),
+    ...Array.from(new Set(products.map((p) => p.tipo).filter(Boolean))).sort(),
   ]
 
   const filtered = products.filter((p) => {
@@ -31,7 +31,7 @@ export default function CatalogoPage() {
       .toLowerCase()
       .includes(searchTerm.toLowerCase())
     const matchesCategory =
-      selectedCategory === 'Todas' || p.categoria === selectedCategory
+      selectedCategory === 'Todas' || p.tipo === selectedCategory
     return matchesSearch && matchesCategory
   })
 
@@ -91,9 +91,9 @@ export default function CatalogoPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
           {filtered.map((product) => (
             <ProductCard
-              key={product.codigoBarras || product.nombre}
+              key={product.nombre}
               nombre={product.nombre}
-              categoria={product.categoria}
+              categoria={product.tipo}
               precioCliente={product.precioCliente}
               imagen={product.imagen}
             />
