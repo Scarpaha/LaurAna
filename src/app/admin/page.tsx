@@ -81,7 +81,7 @@ function ListaTodos() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [editIdx, setEditIdx] = useState<number | null>(null)
-  const [editForm, setEditForm] = useState({ precioCliente: 0, cantidad: 0 })
+  const [editForm, setEditForm] = useState<ProductoUnificado | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
   useEffect(() => {
@@ -162,29 +162,36 @@ function ListaTodos() {
 
   const startEdit = (idx: number, p: ProductoUnificado) => {
     setEditIdx(idx)
-    setEditForm({ precioCliente: p.precioCliente, cantidad: p.cantidad })
+    setEditForm({ ...p })
   }
 
-  const saveEdit = async (p: ProductoUnificado) => {
-    if (p.fuente === 'lote') {
+  const cancelEdit = () => {
+    setEditIdx(null)
+    setEditForm(null)
+  }
+
+  const saveEdit = async () => {
+    if (!editForm || editIdx === null) return
+    if (editForm.fuente === 'lote') {
       if (editForm.cantidad <= 0) {
-        const result = await eliminarLote(p.nombre, p.fechaVencimiento)
+        const result = await eliminarLote(editForm.nombre, editForm.fechaVencimiento)
         if (result.success) {
           showToast('Producto eliminado ✔')
-          setProductos((prev) => prev.filter((x) => x.id !== p.id))
+          setProductos((prev) => prev.filter((x) => x.id !== editForm.id))
         }
       } else {
-        const result = await actualizarCantidadLote(p.nombre, p.fechaVencimiento, editForm.cantidad)
+        const result = await actualizarCantidadLote(editForm.nombre, editForm.fechaVencimiento, editForm.cantidad)
         if (result.success) {
-          showToast('Cantidad actualizada ✔')
-          setProductos((prev) => prev.map((x) => x.id === p.id ? { ...x, cantidad: editForm.cantidad } : x))
+          showToast('Producto actualizado ✔')
+          setProductos((prev) => prev.map((x) => x.id === editForm.id ? { ...editForm } : x))
         }
       }
     } else {
-      setProductos((prev) => prev.map((x) => x.id === p.id ? { ...x, precioCliente: editForm.precioCliente, cantidad: editForm.cantidad } : x))
+      setProductos((prev) => prev.map((x) => x.id === editForm.id ? { ...editForm } : x))
       showToast('Producto actualizado ✔')
     }
     setEditIdx(null)
+    setEditForm(null)
   }
 
   const filtered = productos.filter((p) =>
@@ -215,54 +222,78 @@ function ListaTodos() {
           onChange={(e) => setSearch(e.target.value)}
           className="input-field mb-4"
         />
-        <div className="space-y-2">
+        <div className="space-y-3">
           {filtered.map((p, idx) => (
-            <div key={p.id} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200">
-              <div className="flex-1 min-w-0">
-                <p className="font-bold truncate">{p.nombre}</p>
-                <p className="text-sm text-gray-500">{p.tipo} {p.fechaVencimiento && `• Vence: ${p.fechaVencimiento}`}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                {editIdx === idx ? (
-                  <>
-                    <input
-                      type="number"
-                      value={editForm.precioCliente}
-                      onChange={(e) => setEditForm((f) => ({ ...f, precioCliente: Number(e.target.value) }))}
-                      className="w-20 text-right border rounded p-1 text-sm"
-                      placeholder="Precio"
-                    />
-                    <input
-                      type="number"
-                      value={editForm.cantidad}
-                      onChange={(e) => setEditForm((f) => ({ ...f, cantidad: Number(e.target.value) }))}
-                      className="w-16 text-right border rounded p-1 text-sm"
-                      placeholder="Cant."
-                    />
-                    <button onClick={() => saveEdit(p)} className="p-1 text-exito hover:bg-green-100 rounded">
-                      <CheckCircle className="w-5 h-5" />
+            <div key={p.id} className={`rounded-xl border transition-all ${editIdx === idx ? 'border-2 border-rosa-intenso bg-pink-50 p-4' : 'border-gray-200 bg-white p-3'}`}>
+              {editIdx === idx && editForm ? (
+                <div className="space-y-3">
+                  <h3 className="font-bold text-lg text-rosa-intenso">Editando: {editForm.nombre}</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="label-field">Nombre</label>
+                      <input type="text" value={editForm.nombre} onChange={(e) => setEditForm((f) => f ? { ...f, nombre: e.target.value } : null)} className="input-field" />
+                    </div>
+                    <div>
+                      <label className="label-field">Tipo / Categoría</label>
+                      <select value={editForm.tipo} onChange={(e) => setEditForm((f) => f ? { ...f, tipo: e.target.value, categoria: e.target.value } : null)} className="input-field">
+                        <option value="">Seleccionar...</option>
+                        {TIPOS_PRODUCTO.map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label-field">Precio Cliente ($)</label>
+                      <input type="number" min="0" value={editForm.precioCliente} onChange={(e) => setEditForm((f) => f ? { ...f, precioCliente: Number(e.target.value) } : null)} className="input-field" />
+                    </div>
+                    <div>
+                      <label className="label-field">Cantidad</label>
+                      <input type="number" min="0" value={editForm.cantidad} onChange={(e) => setEditForm((f) => f ? { ...f, cantidad: Number(e.target.value) } : null)} className="input-field" />
+                    </div>
+                    {editForm.fechaVencimiento && (
+                      <div>
+                        <label className="label-field">Vencimiento</label>
+                        <input type="text" value={editForm.fechaVencimiento} onChange={(e) => setEditForm((f) => f ? { ...f, fechaVencimiento: e.target.value } : null)} className="input-field" />
+                      </div>
+                    )}
+                    <div>
+                      <label className="label-field">Origen</label>
+                      <p className="text-sm text-gray-500 py-2">{editForm.fuente === 'maestro' ? '📦 Catálogo (Maestro)' : '📋 Inventario (Lotes)'}</p>
+                    </div>
+                  </div>
+                  {editForm.imagen && (
+                    <div>
+                      <label className="label-field">Imagen</label>
+                      <input type="url" value={editForm.imagen} onChange={(e) => setEditForm((f) => f ? { ...f, imagen: e.target.value } : null)} className="input-field" />
+                    </div>
+                  )}
+                  <div className="flex gap-2 pt-2">
+                    <button onClick={saveEdit} className="btn-primary flex-1">Guardar</button>
+                    <button onClick={cancelEdit} className="btn-secondary flex-1">Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold truncate">{p.nombre}</p>
+                    <p className="text-sm text-gray-500">{p.tipo} {p.fechaVencimiento && `• Vence: ${p.fechaVencimiento}`}</p>
+                    <div className="flex gap-3 mt-1">
+                      <span className="text-sm font-mono text-rosa-intenso">
+                        {p.precioCliente > 0 ? `$${p.precioCliente.toLocaleString('es-CL')}` : 'Sin precio'}
+                      </span>
+                      <span className="text-sm font-mono">
+                        {p.cantidad > 0 ? `Stock: ${p.cantidad}` : 'Sin stock'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    <button onClick={() => startEdit(idx, p)} className="p-2 text-lavanda hover:bg-purple-100 rounded-lg">
+                      <Edit2 className="w-5 h-5" />
                     </button>
-                    <button onClick={() => setEditIdx(null)} className="p-1 text-error hover:bg-red-100 rounded">
-                      <AlertTriangle className="w-5 h-5" />
+                    <button onClick={() => handleDelete(p)} className="p-2 text-error hover:bg-red-100 rounded-lg">
+                      <Trash2 className="w-5 h-5" />
                     </button>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-sm font-mono text-rosa-intenso">
-                      {p.precioCliente > 0 ? `$${p.precioCliente.toLocaleString('es-CL')}` : '-'}
-                    </span>
-                    <span className="text-sm font-mono">
-                      {p.cantidad > 0 ? `Cant: ${p.cantidad}` : ''}
-                    </span>
-                    <button onClick={() => startEdit(idx, p)} className="p-1 text-lavanda hover:bg-purple-100 rounded">
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => handleDelete(p)} className="p-1 text-error hover:bg-red-100 rounded">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </>
-                )}
-              </div>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

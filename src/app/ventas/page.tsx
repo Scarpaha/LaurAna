@@ -48,6 +48,8 @@ export default function VentasPage() {
   const [toast, setToast] = useState<string | null>(null)
   const [editingDate, setEditingDate] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ ventaBoleta: 0, ventaSinBoleta: 0, consumoPropio: 0 })
+  const [historialMes, setHistorialMes] = useState(String(today.getMonth() + 1).padStart(2, '0'))
+  const [historialAnio, setHistorialAnio] = useState(String(today.getFullYear()))
 
   useEffect(() => {
     const load = async () => {
@@ -142,6 +144,10 @@ export default function VentasPage() {
   const totalMes = ventas
     .filter((v) => v.fecha.startsWith(`${selAnio}-${selMes}`))
     .reduce((sum, v) => sum + v.ventaBoleta + v.ventaSinBoleta + v.consumoPropio, 0)
+
+  const ventasHistorial = ventas.filter((v) => v.fecha.startsWith(`${historialAnio}-${historialMes}`))
+
+  const totalHistorialMes = ventasHistorial.reduce((sum, v) => sum + v.ventaBoleta + v.ventaSinBoleta + v.consumoPropio, 0)
 
   const selectedVenta = ventas.find((v) => v.fecha === selectedDate)
   const totalDia = selectedVenta
@@ -267,27 +273,38 @@ export default function VentasPage() {
         </div>
       </div>
 
-      <div className="flex justify-end print:hidden">
-        <button onClick={handlePrint} className="btn-secondary flex items-center gap-2"><Printer className="w-5 h-5" />Imprimir Mes</button>
-      </div>
-
-      {ventas.length > 0 && (
-        <div className="card">
-          <h2 className="text-2xl font-bold mb-4">Historial</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-lavanda/20">
-                  <th className="p-3 text-left rounded-tl-xl">Fecha</th>
-                  <th className="p-3 text-right">Boleta</th>
-                  <th className="p-3 text-right">Sin Boleta</th>
-                  <th className="p-3 text-right">Consumo</th>
-                  <th className="p-3 text-right rounded-tr-xl">Total</th>
-                  <th className="p-3 text-right print:hidden">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ventas.sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 30).map((v) => {
+      <div className="card">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold">Historial</h2>
+          <div className="flex gap-2 items-center">
+            <select value={historialMes} onChange={(e) => setHistorialMes(e.target.value)} className="input-field text-sm py-2">
+              {MESES.map(m => <option key={m} value={m}>{MES_NAMES[m]}</option>)}
+            </select>
+            <select value={historialAnio} onChange={(e) => setHistorialAnio(e.target.value)} className="input-field text-sm py-2">
+              {ANIOS.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+            <button onClick={handlePrint} className="btn-secondary flex items-center gap-2 text-sm py-2">
+              <Printer className="w-4 h-4" />Imprimir
+            </button>
+          </div>
+        </div>
+        <p className="text-sm text-gray-500 mb-3">Mostrando: <strong>{MES_NAMES[historialMes as string] || historialMes} {historialAnio}</strong></p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-lavanda/20">
+                <th className="p-3 text-left rounded-tl-xl">Fecha</th>
+                <th className="p-3 text-right">Boleta</th>
+                <th className="p-3 text-right">Sin Boleta</th>
+                <th className="p-3 text-right">Consumo</th>
+                <th className="p-3 text-right rounded-tr-xl">Total</th>
+                <th className="p-3 text-right print:hidden">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ventasHistorial.length === 0 ? (
+                <tr><td colSpan={6} className="p-6 text-center text-gray-400">No hay ventas en este mes</td></tr>
+              ) : ventasHistorial.sort((a, b) => b.fecha.localeCompare(a.fecha)).map((v) => {
                   const isEditing = editingDate === v.fecha
                   return (
                     <tr key={v.fecha} className={`border-b border-gray-100 ${isEditing ? 'bg-yellow-50' : ''}`}>
@@ -323,10 +340,16 @@ export default function VentasPage() {
                   )
                 })}
               </tbody>
+              <tfoot>
+                <tr className="bg-rosa-intenso/10">
+                  <td className="p-3 font-bold" colSpan={4}>Total Mes</td>
+                  <td className="p-3 text-right font-bold text-rosa-intenso">${totalHistorialMes.toLocaleString('es-CL')}</td>
+                  <td className="print:hidden"></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
-      )}
 
       {toast && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-full shadow-lg z-50 font-semibold flex items-center gap-2">
