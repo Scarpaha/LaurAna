@@ -51,7 +51,7 @@ export function convertDriveImageUrl(url: string): string {
   if (match) {
     return `https://lh3.googleusercontent.com/u/0/d/${match[1]}`
   }
-  if (url.includes('lh3.googleusercontent.com')) {
+  if (url.includes('lh3.googleusercontent.com') || url.includes('walmartimages') || url.includes('mlstatic') || url.includes('gstatic')) {
     return url
   }
   return url
@@ -93,11 +93,7 @@ function parseFlexibleDate(raw: unknown): string {
   }
   const parts = s.split(/[-/.\s]/)
   if (parts.length === 3) {
-    const combos = [
-      [2, 1, 0],
-      [1, 0, 2],
-      [0, 1, 2],
-    ]
+    const combos = [[2, 1, 0], [1, 0, 2], [0, 1, 2]]
     for (const [di, mi, yi] of combos) {
       let day = Number(parts[di])
       let month = Number(parts[mi])
@@ -113,9 +109,7 @@ function parseFlexibleDate(raw: unknown): string {
   }
   if (parts.length === 2) {
     const yearPart = parts.find(p => p.length === 4 && Number(p) >= 2000 && Number(p) <= 2100)
-    if (yearPart) {
-      return `${yearPart}-01-01`
-    }
+    if (yearPart) return `${yearPart}-01-01`
   }
   if (parts.length === 1 && Number(parts[0]) >= 2000 && Number(parts[0]) <= 2100) {
     return `${parts[0]}-01-01`
@@ -125,9 +119,7 @@ function parseFlexibleDate(raw: unknown): string {
 
 async function readSheet(sheetName: string): Promise<Record<string, unknown>[]> {
   try {
-    const response = await fetch(`${SCRIPT_URL}?sheet=${encodeURIComponent(sheetName)}`, {
-      cache: 'no-store',
-    })
+    const response = await fetch(`${SCRIPT_URL}?sheet=${encodeURIComponent(sheetName)}`, { cache: 'no-store' })
     if (!response.ok) throw new Error(`Error al cargar ${sheetName}`)
     const data = await response.json()
     if (Array.isArray(data) && data.length > 1) {
@@ -135,9 +127,7 @@ async function readSheet(sheetName: string): Promise<Record<string, unknown>[]> 
       const rows = data.slice(1)
       return rows.map((row) => {
         const obj: Record<string, unknown> = {}
-        headers.forEach((h: string, i: number) => {
-          obj[h] = row[i] ?? ''
-        })
+        headers.forEach((h: string, i: number) => { obj[h] = row[i] ?? '' })
         return obj
       })
     }
@@ -150,11 +140,7 @@ async function readSheet(sheetName: string): Promise<Record<string, unknown>[]> 
 
 async function writeRow(sheetName: string, values: unknown[]): Promise<{ success: boolean; message: string }> {
   try {
-    const response = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      body: JSON.stringify({ targetSheet: sheetName, values }),
-    })
+    await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ targetSheet: sheetName, values }) })
     return { success: true, message: 'Guardado correctamente' }
   } catch (error) {
     console.error(`Error escribiendo en ${sheetName}:`, error)
@@ -171,16 +157,16 @@ export async function fetchMaestroProductos(): Promise<Producto[]> {
       nombre: str(item['Nombre del Producto'] || values[1] || ''),
       categoria: str(item['Categoría'] || values[2] || 'Sin categoría'),
       mesesDuracionEstandar: num(item['Meses Duración Estándar'] || values[3] || 0),
-      precioCliente: num(item['Precio al Cliente'] || values[4] || 0),
+      precioCliente: num(item['Precio'] || values[4] || 0),
       imagen: convertDriveImageUrl(str(item['Link de la Imagen'] || values[5] || '')),
     }
-  })
+  }).filter(p => p.nombre)
 
   const lotes = await fetchInventarioLotes()
   const merged = [...base]
-  const seen = new Set<string>(base.map((p) => p.nombre.toLowerCase().trim()))
+  const seen = new Set<string>(base.map(p => p.nombre.toLowerCase().trim()))
   for (const lote of lotes) {
-    if (!lote.producto) continue
+    if (!lote.producto || lote.estado === 'Eliminado') continue
     const key = lote.producto.toLowerCase().trim()
     if (!seen.has(key)) {
       merged.push({
@@ -211,15 +197,11 @@ export async function fetchCajaDiaria(): Promise<VentaDiaria[]> {
     let fecha = ''
     if (fechaRaw) {
       const d = new Date(String(fechaRaw))
-      if (!isNaN(d.getTime())) {
-        fecha = d.toISOString().split('T')[0]
-      }
+      if (!isNaN(d.getTime())) fecha = d.toISOString().split('T')[0]
     }
     if (!fecha && typeof fechaRaw === 'string') fecha = fechaRaw.trim()
     if (!fecha) continue
-    if (!grouped[fecha]) {
-      grouped[fecha] = { ventaBoleta: 0, ventaSinBoleta: 0, consumoPropio: 0 }
-    }
+    if (!grouped[fecha]) grouped[fecha] = { ventaBoleta: 0, ventaSinBoleta: 0, consumoPropio: 0 }
     grouped[fecha].ventaBoleta += num(item['Venta con Boleta'])
     grouped[fecha].ventaSinBoleta += num(item['Venta sin Boleta'])
     grouped[fecha].consumoPropio += num(item['Consumo Propio'])
@@ -233,136 +215,54 @@ export async function fetchCajaDiaria(): Promise<VentaDiaria[]> {
   }))
 }
 
-export async function registrarVentaDiaria(venta: {
-  fecha: string
-  ventaBoleta: number
-  ventaSinBoleta: number
-  consumoPropio: number
-}): Promise<{ success: boolean; message: string }> {
+export async function registrarVentaDiaria(venta: { fecha: string; ventaBoleta: number; ventaSinBoleta: number; consumoPropio: number }): Promise<{ success: boolean; message: string }> {
   const total = venta.ventaBoleta + venta.ventaSinBoleta + venta.consumoPropio
-  return writeRow('Caja_Diaria', [
-    venta.fecha,
-    venta.ventaBoleta,
-    venta.ventaSinBoleta,
-    venta.consumoPropio,
-    total,
-  ])
+  return writeRow('Caja_Diaria', [venta.fecha, venta.ventaBoleta, venta.ventaSinBoleta, venta.consumoPropio, total])
 }
 
-export async function updateCajaDiaria(venta: {
-  fecha: string
-  ventaBoleta: number
-  ventaSinBoleta: number
-  consumoPropio: number
-}): Promise<{ success: boolean; message: string }> {
+export async function updateCajaDiaria(venta: { fecha: string; ventaBoleta: number; ventaSinBoleta: number; consumoPropio: number }): Promise<{ success: boolean; message: string }> {
   const total = venta.ventaBoleta + venta.ventaSinBoleta + venta.consumoPropio
-  return writeRow('Caja_Diaria', [
-    venta.fecha,
-    venta.ventaBoleta,
-    venta.ventaSinBoleta,
-    venta.consumoPropio,
-    total,
-  ])
+  return writeRow('Caja_Diaria', [venta.fecha, venta.ventaBoleta, venta.ventaSinBoleta, venta.consumoPropio, total])
 }
 
-export async function deleteCajaDiaria(venta: {
-  fecha: string
-  ventaBoleta: number
-  ventaSinBoleta: number
-  consumoPropio: number
-}): Promise<{ success: boolean; message: string }> {
+export async function deleteCajaDiaria(venta: { fecha: string; ventaBoleta: number; ventaSinBoleta: number; consumoPropio: number }): Promise<{ success: boolean; message: string }> {
   const total = -(venta.ventaBoleta + venta.ventaSinBoleta + venta.consumoPropio)
-  return writeRow('Caja_Diaria', [
-    venta.fecha,
-    -venta.ventaBoleta,
-    -venta.ventaSinBoleta,
-    -venta.consumoPropio,
-    total,
-  ])
+  return writeRow('Caja_Diaria', [venta.fecha, -venta.ventaBoleta, -venta.ventaSinBoleta, -venta.consumoPropio, total])
 }
 
-export async function registrarProducto(producto: {
-  codigoBarras: string
-  nombre: string
-  categoria: string
-  precioCliente: number
-  imagen: string
-}): Promise<{ success: boolean; message: string }> {
-  return writeRow('Maestro_Productos', [
-    producto.codigoBarras,
-    producto.nombre,
-    producto.categoria,
-    0,
-    producto.precioCliente,
-    producto.imagen,
-  ])
+export async function registrarProducto(producto: { codigoBarras: string; nombre: string; categoria: string; precioCliente: number; imagen: string }): Promise<{ success: boolean; message: string }> {
+  return writeRow('Maestro_Productos', [producto.codigoBarras, producto.nombre, producto.categoria, 0, producto.precioCliente, producto.imagen])
 }
 
-export async function registrarLote(lote: {
-  codigoBarras: string
-  producto: string
-  tipo: string
-  detalle: string
-  cantidad: number
-  fechaVencimiento: string
-  fechaElaboracion: string
-  mesesDuracion: number
-  costoNetoUnitario: number
-  ivaCredito: number
-  totalFactura: number
-  linkImagen: string
-}): Promise<{ success: boolean; message: string }> {
-  return writeRow('Inventario_Lotes', [
-    lote.codigoBarras,
-    lote.producto,
-    lote.cantidad,
-    lote.fechaVencimiento,
-    lote.fechaElaboracion,
-    lote.mesesDuracion,
-    lote.fechaVencimiento,
-    lote.costoNetoUnitario,
-    lote.ivaCredito,
-    lote.totalFactura,
-    'Activo',
-    lote.linkImagen,
-  ])
+export async function registrarLote(lote: { codigoBarras: string; producto: string; tipo: string; detalle: string; cantidad: number; fechaVencimiento: string; fechaElaboracion: string; mesesDuracion: number; costoNetoUnitario: number; ivaCredito: number; totalFactura: number; linkImagen: string }): Promise<{ success: boolean; message: string }> {
+  return writeRow('Inventario_Lotes', [lote.codigoBarras, lote.producto, lote.cantidad, lote.fechaVencimiento, lote.fechaElaboracion, lote.mesesDuracion, lote.fechaVencimiento, lote.costoNetoUnitario, lote.ivaCredito, lote.totalFactura, 'Activo', lote.linkImagen])
 }
 
-export async function registrarLotesMultiple(lotes: Array<{
-  codigoBarras: string
-  producto: string
-  tipo: string
-  detalle: string
-  cantidad: number
-  fechaVencimiento: string
-  fechaElaboracion: string
-  mesesDuracion: number
-  costoNetoUnitario: number
-  ivaCredito: number
-  totalFactura: number
-  linkImagen: string
-}>): Promise<{ success: boolean; message: string }> {
+export async function registrarLotesMultiple(lotes: Array<{ codigoBarras: string; producto: string; tipo: string; detalle: string; cantidad: number; fechaVencimiento: string; fechaElaboracion: string; mesesDuracion: number; costoNetoUnitario: number; ivaCredito: number; totalFactura: number; linkImagen: string }>): Promise<{ success: boolean; message: string; totalFactura: number }> {
+  let totalFactura = 0
   for (const lote of lotes) {
     await registrarLote(lote)
+    totalFactura += lote.totalFactura
   }
-  return { success: true, message: `${lotes.length} productos registrados` }
+  return { success: true, message: `${lotes.length} productos registrados`, totalFactura }
 }
 
-export async function eliminarLote(producto: string, fechaVencimiento: string): Promise<{ success: boolean; message: string }> {
-  return writeRow('Inventario_Lotes', [
-    '',
-    producto,
-    0,
-    fechaVencimiento,
-    '',
-    0,
-    fechaVencimiento,
-    0,
-    0,
-    0,
-    'Eliminado',
-    '',
-  ])
+export async function eliminarLote(producto: string, fechaVencimiento: string, cantidad: number = 1): Promise<{ success: boolean; message: string }> {
+  return writeRow('Inventario_Lotes', ['', producto, -cantidad, fechaVencimiento, '', 0, fechaVencimiento, 0, 0, 0, 'Eliminado', ''])
+}
+
+export async function actualizarCantidadLote(producto: string, fechaVencimiento: string, nuevaCantidad: number): Promise<{ success: boolean; message: string }> {
+  if (nuevaCantidad <= 0) {
+    return writeRow('Inventario_Lotes', ['', producto, 0, fechaVencimiento, '', 0, fechaVencimiento, 0, 0, 0, 'Eliminado', ''])
+  }
+  return writeRow('Inventario_Lotes', ['', producto, nuevaCantidad, fechaVencimiento, '', 0, fechaVencimiento, 0, 0, 0, 'Activo', ''])
+}
+
+export async function actualizarInversion(monto: number): Promise<{ success: boolean; message: string }> {
+  const rows = await readSheet('Panel_Papa')
+  const current = rows.length > 0 ? num(rows[0]['INVERSIÓN TOTAL (Facturas + IVA)']) : 0
+  const nuevaInversion = current + monto
+  return writeRow('Panel_Papa', ['', nuevaInversion, Math.round(nuevaInversion * 1.2), num(rows[0]?.['VENTA REAL ACUMULADA'] || 0), 0])
 }
 
 export async function fetchPanelPapa(): Promise<PanelPapa | null> {
@@ -380,35 +280,48 @@ export async function fetchPanelPapa(): Promise<PanelPapa | null> {
 
 export async function fetchInventarioLotes(): Promise<LoteInventario[]> {
   const rows = await readSheet('Inventario_Lotes')
-  return rows.map((item) => {
+  const grouped: Record<string, LoteInventario> = {}
+  for (const item of rows) {
+    const producto = str(item['Producto'])
+    if (!producto) continue
     const fechaVencimiento = parseFlexibleDate(item['Fecha Vencimiento'])
-    const fechaElaboracion = parseFlexibleDate(item['Fecha Elaboración'])
     const vencimientoFinal = item['Vencimiento Final'] instanceof Date
       ? (item['Vencimiento Final'] as Date).toISOString().split('T')[0]
       : parseFlexibleDate(item['Vencimiento Final'] || item['Fecha Vencimiento'])
-    return {
-      codigoBarras: str(item['Código de Barras']),
-      producto: str(item['Producto']),
-      tipo: str(item['Tipo'] || item['Categoría'] || ''),
-      detalle: str(item['Detalle'] || ''),
-      cantidad: num(item['Cantidad']),
-      fechaVencimiento,
-      fechaElaboracion,
-      mesesDuracion: num(item['Meses Duración']),
-      vencimientoFinal,
-      costoNetoUnitario: num(item['Costo Neto Unitario']),
-      ivaCredito: num(item['IVA Crédito (19%)']),
-      totalFactura: num(item['Total Factura Lote']),
-      estado: str(item['Estado'] || 'Activo'),
-      linkImagen: convertDriveImageUrl(str(item['Link de la Imagen'])),
+    const key = `${producto.toLowerCase().trim()}|${vencimientoFinal || fechaVencimiento}`
+    if (!grouped[key]) {
+      grouped[key] = {
+        codigoBarras: str(item['Código de Barras']),
+        producto,
+        tipo: str(item['Tipo'] || item['Categoría'] || ''),
+        detalle: str(item['Detalle'] || ''),
+        cantidad: 0,
+        fechaVencimiento,
+        fechaElaboracion: parseFlexibleDate(item['Fecha Elaboración']),
+        mesesDuracion: num(item['Meses Duración']),
+        vencimientoFinal,
+        costoNetoUnitario: num(item['Costo Neto Unitario']),
+        ivaCredito: num(item['IVA Crédito (19%)']),
+        totalFactura: num(item['Total Factura Lote']),
+        estado: str(item['Estado'] || 'Activo'),
+        linkImagen: convertDriveImageUrl(str(item['Link de la Imagen'])),
+      }
     }
-  }).filter((l) => l.producto)
+    const estado = str(item['Estado'] || 'Activo')
+    const cantidad = num(item['Cantidad'])
+    if (estado === 'Eliminado' && cantidad <= 0) {
+      grouped[key].estado = 'Eliminado'
+    } else if (estado === 'Eliminado') {
+      grouped[key].cantidad -= Math.abs(cantidad)
+      if (grouped[key].cantidad <= 0) grouped[key].estado = 'Eliminado'
+    } else {
+      grouped[key].cantidad += cantidad
+    }
+  }
+  return Object.values(grouped).filter(l => l.producto && l.estado !== 'Eliminado' && l.cantidad > 0)
 }
 
-export function calcularVencimientoFinal(
-  fechaElaboracion: string,
-  mesesDuracion: number
-): string {
+export function calcularVencimientoFinal(fechaElaboracion: string, mesesDuracion: number): string {
   if (!fechaElaboracion || !mesesDuracion) return ''
   const fecha = new Date(fechaElaboracion + 'T12:00:00')
   fecha.setMonth(fecha.getMonth() + mesesDuracion)
@@ -421,6 +334,5 @@ export function diasParaVencer(fechaVencimiento: string): number {
   hoy.setHours(0, 0, 0, 0)
   const venc = new Date(fechaVencimiento + 'T12:00:00')
   venc.setHours(0, 0, 0, 0)
-  const diff = venc.getTime() - hoy.getTime()
-  return Math.ceil(diff / (1000 * 60 * 60 * 24))
+  return Math.ceil((venc.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24))
 }
