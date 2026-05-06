@@ -446,7 +446,7 @@ function FormularioIndividual() {
                   })}
                 </select>
               </div>
-              <p className="text-xs text-gray-400 mt-1">Fecha seleccionada: {fechaParts.year ?? dateParts.year}-{fechaParts.month ?? dateParts.month}-{fechaParts.day ?? dateParts.day}</p>
+              <p className="text-xs text-gray-400 mt-1">Fecha seleccionada: {fechaParts.year}-{fechaParts.month}-{fechaParts.day}</p>
             </div>
           )}
 
