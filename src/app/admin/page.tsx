@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   registrarLote,
   registrarLotesMultiple,
@@ -41,6 +41,14 @@ interface LoteItem {
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('individual')
+  // Cascading date picker parts for vencimiento (days -> months -> years)
+  const [dateParts, setDateParts] = useState({ day: '1', month: '01', year: String(new Date().getFullYear()) })
+  // Sync initial parts from existing fecha if present
+  useEffect(() => {
+    // No-op if no existing date
+  }, [])
+  const [eliminarCodigo, setEliminarCodigo] = useState('')
+  const [deleteStatus, setDeleteStatus] = useState<string | null>(null)
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
@@ -80,6 +88,35 @@ export default function AdminPage() {
 
       {activeTab === 'individual' && <FormularioIndividual />}
       {activeTab === 'factura' && <FormularioFactura />}
+
+      <section className="card border-2 border-gray-200 p-4 sm:p-6 bg-white print:hidden">
+        <h3 className="text-xl font-bold mb-2">Eliminar Producto (soft)</h3>
+        <div className="flex gap-2 items-center">
+          <input
+            type="text"
+            value={eliminarCodigo}
+            onChange={(e) => setEliminarCodigo(e.target.value)}
+            placeholder="Código de Barras"
+            className="input-field flex-1"
+          />
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={async () => {
+              if (!eliminarCodigo.trim()) return
+              const api = await import('@/lib/api')
+              const { eliminarProducto } = api
+              const { success, message } = await eliminarProducto(eliminarCodigo.trim())
+              setDeleteStatus(message || (success ? 'Eliminación registrada' : 'Error'))
+              // Limpiar código solo si se eliminó con éxito
+              if (success) setEliminarCodigo('')
+            }}
+          >
+            Eliminar
+          </button>
+        </div>
+        {deleteStatus && <p className="text-sm text-gray-600 mt-2">{deleteStatus}</p>}
+      </section>
     </div>
   )
 }
@@ -103,6 +140,7 @@ function calcTotals(precio: number, cantidad: number, mode: PriceMode) {
 }
 
 function FormularioIndividual() {
+  const [fechaParts, setFechaParts] = useState({ day: '1', month: '01', year: String(new Date().getFullYear()) })
   const [form, setForm] = useState({
     codigoBarras: '',
     tipo: '',
@@ -390,14 +428,25 @@ function FormularioIndividual() {
           {vencimiento.modo === 'fecha' && (
             <div>
               <label className="label-field">Fecha de Vencimiento</label>
-              <input
-                type="date"
-                value={vencimiento.fechaVencimiento}
-                onChange={(e) => setVencimiento((p) => ({ ...p, fechaVencimiento: e.target.value }))}
-                className="input-field"
-                required
-              />
-              <p className="text-xs text-gray-400 mt-1">Ej: 15-06-2026</p>
+              <div className="flex gap-2">
+                <select value={fechaParts.day} onChange={(e)=>{ setFechaParts(p => ({ ...p, day: e.target.value })); setVencimiento((pp)=>({ ...pp, fechaVencimiento: `${fechaParts.year}-${fechaParts.month}-${e.target.value}` })); }} className="input-field">
+                  {Array.from({ length: 31 }, (_, i) => (
+                    <option key={i+1} value={String(i+1).padStart(2,'0')}>{String(i+1).padStart(2,'0')}</option>
+                  ))}
+                </select>
+                <select value={fechaParts.month} onChange={(e)=>{ setFechaParts(p => ({ ...p, month: e.target.value })); setVencimiento((pp)=>({ ...pp, fechaVencimiento: `${fechaParts.year}-${e.target.value}-${fechaParts.day}` })); }} className="input-field">
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <option key={i+1} value={String(i+1).padStart(2,'0')}>{String(i+1).padStart(2,'0')}</option>
+                  ))}
+                </select>
+                <select value={fechaParts.year} onChange={(e)=>{ setFechaParts(p => ({ ...p, year: e.target.value })); setVencimiento((pp)=>({ ...pp, fechaVencimiento: `${e.target.value}-${fechaParts.month}-${fechaParts.day}` })); }} className="input-field">
+                  {Array.from({ length: 12 }, (_, i) => {
+                    const y = Number(new Date().getFullYear()) - 0 + i
+                    return <option key={y} value={String(y)}>{y}</option>
+                  })}
+                </select>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Fecha seleccionada: {fechaParts.year ?? dateParts.year}-{fechaParts.month ?? dateParts.month}-{fechaParts.day ?? dateParts.day}</p>
             </div>
           )}
 

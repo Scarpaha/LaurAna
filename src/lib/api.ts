@@ -175,25 +175,9 @@ async function writeRow(sheetName: string, values: unknown[]): Promise<{ success
 }
 
 export async function fetchMaestroProductos(): Promise<Producto[]> {
+  // Cargar maestros desde Maestro_Productos
   const rows = await readSheet('Maestro_Productos')
-  
-  if (rows.length === 0) return []
-  
-  const firstRow = rows[0]
-  const keys = Object.keys(firstRow)
-  
-  // Try to find columns by name or position
-  const findColumn = (names: string[], fallbackIndex: number): unknown => {
-    for (const name of names) {
-      if (firstRow[name] !== undefined) return firstRow[name]
-    }
-    // Fallback to index
-    const values = Object.values(firstRow)
-    if (values.length > fallbackIndex) return values[fallbackIndex]
-    return undefined
-  }
-  
-  return rows.map((item) => {
+  const base = (rows || []).map((item) => {
     const values = Object.values(item)
     return {
       codigoBarras: str(item['Código de Barras'] || values[0] || ''),
@@ -203,7 +187,36 @@ export async function fetchMaestroProductos(): Promise<Producto[]> {
       precioCliente: num(item['Precio al Cliente'] || values[4] || 0),
       imagen: convertDriveImageUrl(str(item['Link de la Imagen'] || values[5] || '')),
     }
-  }).filter((p) => p.nombre)
+  })
+
+  // Fusionar con Inventario_Lotes para incluir productos que existen solo en el stock
+  const lotes = await fetchInventarioLotes()
+  const merged = [...base]
+  const seen = new Set<string>(base.map((p) => p.nombre))
+  for (const lote of lotes) {
+    if (!lote.producto) continue
+    // Normalizar nombre para evitar duplicados por espacios
+    const normLote = lote.producto.trim()
+    const exists = Array.from(seen).some(n => n.trim() === normLote)
+    if (!exists) {
+      merged.push({
+        codigoBarras: lote.codigoBarras,
+        nombre: lote.producto,
+        categoria: lote.tipo || 'Sin categoría',
+        mesesDuracionEstandar: lote.mesesDuracion || 0,
+        precioCliente: 0,
+        imagen: lote.linkImagen ? convertDriveImageUrl(lote.linkImagen) : convertDriveImageUrl(''),
+      } as Producto)
+      seen.add(lote.producto)
+    }
+  }
+
+  // Eliminar duplicados por nombre (por seguridad, conserva la primera aparición)
+  const unique = new Map<string, Producto>()
+  for (const p of merged) {
+    if (!unique.has(p.nombre.trim())) unique.set(p.nombre.trim(), p)
+  }
+  return Array.from(unique.values())
 }
 
 export async function fetchCajaDiaria(): Promise<VentaDiaria[]> {
@@ -268,6 +281,23 @@ export async function deleteCajaDiaria(_fecha: string): Promise<{ success: boole
   return { success: false, message: 'Eliminar requiere Apps Script con lógica de borrado. Por ahora, edita y pon todo en 0.' }
 }
 
+// Nueva función para anular ventas de un día (agrega valores negativos para cancelar el total)
+export async function anularVentaDiaria(venta: {
+  fecha: string
+  ventaBoleta: number
+  ventaSinBoleta: number
+  consumoPropio: number
+}): Promise<{ success: boolean; message: string }> {
+  const total = -(venta.ventaBoleta + venta.ventaSinBoleta + venta.consumoPropio)
+  return writeRow('Caja_Diaria', [
+    venta.fecha,
+    -venta.ventaBoleta,
+    -venta.ventaSinBoleta,
+    -venta.consumoPropio,
+    total,
+  ])
+}
+
 export async function registrarProducto(producto: {
   codigoBarras: string
   nombre: string
@@ -283,6 +313,14 @@ export async function registrarProducto(producto: {
     producto.precioCliente,
     producto.imagen,
   ])
+}
+
+// Registro simple de eliminación para auditoría (no elimina de Maestro_Productos directamente, se puede ampliar con Apps Script)
+export async function eliminarProducto(codigoBarras: string): Promise<{ success: boolean; message: string }> {
+  // Guardar en una hoja de auditoría para eliminación futura
+  const fecha = new Date().toISOString()
+  const res = await writeRow('Productos_Eliminados', [codigoBarras, fecha, 'Eliminado por admin'])
+  return res
 }
 
 export async function fetchPanelPapa(): Promise<PanelPapa | null> {

@@ -28,9 +28,16 @@ export default function VentasPage() {
   const [panel, setPanel] = useState<PanelPapa | null>(null)
   const [ventas, setVentas] = useState<VentaDiaria[]>([])
   const [loading, setLoading] = useState(true)
-  const today = new Date().toISOString().slice(0, 10)
-
-  const [selectedDate, setSelectedDate] = useState(today)
+  // Listado de fechas para elegir por listado (30 días)
+  const todayInitial = new Date().toISOString().slice(0, 10)
+  const dateOptions: string[] = []
+  const baseDate = new Date()
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(baseDate)
+    d.setDate(baseDate.getDate() + i)
+    dateOptions.push(d.toISOString().slice(0, 10))
+  }
+  const [selectedDate, setSelectedDate] = useState<string>(todayInitial)
   const [mode, setMode] = useState<Mode>('boleta')
   const [input, setInput] = useState('')
   const [toast, setToast] = useState<string | null>(null)
@@ -200,7 +207,11 @@ export default function VentasPage() {
       <div className="card print:hidden">
         <div className="mb-4">
           <label className="label-field flex items-center gap-2"><Calendar className="w-5 h-5" />Fecha</label>
-          <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="input-field" />
+          <select value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="input-field">
+            {dateOptions.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
         </div>
 
         <div className="flex gap-2 mb-4">
