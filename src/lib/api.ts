@@ -30,6 +30,7 @@ export interface PanelPapa {
   metaVenta: number
   ventaReal: number
   diferencia: number
+  fecha: string
 }
 
 export interface LoteInventario {
@@ -298,9 +299,12 @@ export async function registrarProductoCompleto(datos: { nombre: string; tipo: s
 
 export async function actualizarInversion(monto: number): Promise<{ success: boolean; message: string }> {
   const rows = await readSheet('Dashboard')
-  const current = rows.length > 0 ? num(rows[0]['inversión'] || rows[0]['inversión'] || 0) : 0
+  const current = rows.length > 0 ? num(rows[0]['inversión'] || 0) : 0
   const nuevaInversion = current + monto
-  return writeRow('Dashboard', ['', nuevaInversion, Math.round(nuevaInversion * 1.2), num(rows[0]?.['venta real'] || rows[0]?.['venta real'] || 0), 0])
+  const now = new Date()
+  const mesLabel = now.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })
+  const fechaStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  return writeRow('Dashboard', [mesLabel, nuevaInversion, Math.round(nuevaInversion * 1.2), num(rows[0]?.['venta real'] || 0), fechaStr])
 }
 
 export async function fetchPanelPapa(): Promise<PanelPapa | null> {
@@ -308,11 +312,12 @@ export async function fetchPanelPapa(): Promise<PanelPapa | null> {
   if (rows.length === 0) return null
   const d = rows[0]
   return {
-    mesActual: str(d['Métricas'] || d['mesActual'] || ''),
-    inversionTotal: num(d['inversión'] || d['inversionTotal'] || 0),
-    metaVenta: num(d['meta'] || d['metaVenta'] || 0),
-    ventaReal: num(d['venta real'] || d['ventaReal'] || 0),
-    diferencia: num(d['diferencia'] || d['diferencia'] || 0),
+    mesActual: str(d['Métricas'] || ''),
+    inversionTotal: num(d['inversión'] || 0),
+    metaVenta: num(d['meta'] || 0),
+    ventaReal: num(d['venta real'] || 0),
+    diferencia: num(d['diferencia'] || 0),
+    fecha: str(d['fecha'] || ''),
   }
 }
 
