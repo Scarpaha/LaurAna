@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { fetchInventarioLotes, diasParaVencer, type LoteInventario } from '@/lib/api'
-import { AlertTriangle, Loader2, PackageX, Calendar } from 'lucide-react'
+import { fetchInventarioLotes, eliminarLote, diasParaVencer, type LoteInventario } from '@/lib/api'
+import { AlertTriangle, Loader2, PackageX, Calendar, Trash2 } from 'lucide-react'
 
 export default function VencimientosPage() {
   const [lotes, setLotes] = useState<LoteInventario[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'todos' | 'critico' | 'alerta' | 'ok'>('todos')
+  const [toast, setToast] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -19,7 +20,23 @@ export default function VencimientosPage() {
     load()
   }, [])
 
+  const showToast = (msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2500)
+  }
+
+  const handleEliminar = async (lote: LoteInventario) => {
+    if (!confirm(`¿Marcar "${lote.producto}" como eliminado/merma?`)) return
+    const result = await eliminarLote(lote.producto, lote.vencimientoFinal || lote.fechaVencimiento)
+    if (result.success) {
+      showToast('Producto marcado como eliminado ✔')
+      const data = await fetchInventarioLotes()
+      setLotes(data)
+    }
+  }
+
   const lotsWithDays = lotes
+    .filter(l => l.estado !== 'Eliminado' && l.cantidad > 0)
     .map((lote) => {
       const fechaUsar = lote.vencimientoFinal || lote.fechaVencimiento
       const dias = diasParaVencer(fechaUsar)
@@ -121,15 +138,26 @@ export default function VencimientosPage() {
                       <span>Cantidad: {lote.cantidad}</span>
                     </div>
                   </div>
-                  <div className={`text-center px-4 py-2 rounded-xl ${isCritico ? 'bg-error text-white' : isAlerta ? 'bg-aviso text-carbon' : 'bg-exito/20 text-exito'}`}>
-                    <AlertTriangle className="w-5 h-5 mx-auto mb-1" />
-                    <p className="font-extrabold text-xl">{lote.diasParaVencer}</p>
-                    <p className="text-xs">días</p>
+                  <div className="flex flex-col items-center gap-2">
+                    <div className={`text-center px-4 py-2 rounded-xl ${isCritico ? 'bg-error text-white' : isAlerta ? 'bg-aviso text-carbon' : 'bg-exito/20 text-exito'}`}>
+                      <AlertTriangle className="w-5 h-5 mx-auto mb-1" />
+                      <p className="font-extrabold text-xl">{lote.diasParaVencer}</p>
+                      <p className="text-xs">días</p>
+                    </div>
+                    <button onClick={() => handleEliminar(lote)} className="p-1 text-error hover:bg-red-100 rounded">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>
             )
           })}
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-full shadow-lg z-50 font-semibold flex items-center gap-2">
+          <Trash2 className="w-5 h-5" />{toast}
         </div>
       )}
     </div>

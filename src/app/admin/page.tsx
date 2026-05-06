@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   registrarLote,
   registrarLotesMultiple,
@@ -24,7 +24,6 @@ type DateMode = 'fecha' | 'calcular' | 'anio'
 
 interface LoteItem {
   id: string
-  codigoBarras: string
   producto: string
   tipo: string
   detalle: string
@@ -32,8 +31,6 @@ interface LoteItem {
   fechaVencimiento: string
   fechaElaboracion: string
   mesesDuracion: number
-  anioVencimiento: string
-  dateMode: DateMode
   precioUnitario: number
   priceMode: PriceMode
   linkImagen: string
@@ -41,14 +38,6 @@ interface LoteItem {
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('individual')
-  // Cascading date picker parts for vencimiento (days -> months -> years)
-  const [dateParts, setDateParts] = useState({ day: '1', month: '01', year: String(new Date().getFullYear()) })
-  // Sync initial parts from existing fecha if present
-  useEffect(() => {
-    // No-op if no existing date
-  }, [])
-  const [eliminarCodigo, setEliminarCodigo] = useState('')
-  const [deleteStatus, setDeleteStatus] = useState<string | null>(null)
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
@@ -88,35 +77,6 @@ export default function AdminPage() {
 
       {activeTab === 'individual' && <FormularioIndividual />}
       {activeTab === 'factura' && <FormularioFactura />}
-
-      <section className="card border-2 border-gray-200 p-4 sm:p-6 bg-white print:hidden">
-        <h3 className="text-xl font-bold mb-2">Eliminar Producto (soft)</h3>
-        <div className="flex gap-2 items-center">
-          <input
-            type="text"
-            value={eliminarCodigo}
-            onChange={(e) => setEliminarCodigo(e.target.value)}
-            placeholder="Código de Barras"
-            className="input-field flex-1"
-          />
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={async () => {
-              if (!eliminarCodigo.trim()) return
-              const api = await import('@/lib/api')
-              const { eliminarProducto } = api
-              const { success, message } = await eliminarProducto(eliminarCodigo.trim())
-              setDeleteStatus(message || (success ? 'Eliminación registrada' : 'Error'))
-              // Limpiar código solo si se eliminó con éxito
-              if (success) setEliminarCodigo('')
-            }}
-          >
-            Eliminar
-          </button>
-        </div>
-        {deleteStatus && <p className="text-sm text-gray-600 mt-2">{deleteStatus}</p>}
-      </section>
     </div>
   )
 }
@@ -126,6 +86,10 @@ const TIPOS_PRODUCTO = [
   'Snacks', 'Aseo', 'Verduras', 'Frutas', 'Enlatados',
   'Congelados', 'Endulzantes', 'Aceites', 'Harinas', 'Especias', 'Otro',
 ]
+
+const DIAS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'))
+const MESES = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
+const ANIOS = Array.from({ length: 12 }, (_, i) => String(new Date().getFullYear() + i))
 
 function calcTotals(precio: number, cantidad: number, mode: PriceMode) {
   if (mode === 'neto') {
@@ -140,9 +104,7 @@ function calcTotals(precio: number, cantidad: number, mode: PriceMode) {
 }
 
 function FormularioIndividual() {
-  const [fechaParts, setFechaParts] = useState({ day: '1', month: '01', year: String(new Date().getFullYear()) })
   const [form, setForm] = useState({
-    codigoBarras: '',
     tipo: '',
     producto: '',
     detalle: '',
@@ -159,6 +121,11 @@ function FormularioIndividual() {
     mesesDuracion: 6,
     anioVencimiento: '',
   })
+  const [fechaParts, setFechaParts] = useState({
+    day: '01',
+    month: String(new Date().getMonth() + 1).padStart(2, '0'),
+    year: String(new Date().getFullYear()),
+  })
   const [calculatedDate, setCalculatedDate] = useState('')
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState('')
@@ -166,12 +133,7 @@ function FormularioIndividual() {
   const price = Number(form.precioUnitario || 0)
   const totals = calcTotals(price, form.cantidad, form.priceMode)
 
-  const formatDateDisplay = (dateStr: string): string => {
-    if (!dateStr) return ''
-    const parts = dateStr.split('-')
-    if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`
-    return dateStr
-  }
+  const fechaVencimientoFromParts = `${fechaParts.year}-${fechaParts.month}-${fechaParts.day}`
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -179,7 +141,7 @@ function FormularioIndividual() {
 
     let fechaVencimiento = ''
     if (vencimiento.modo === 'fecha') {
-      fechaVencimiento = vencimiento.fechaVencimiento
+      fechaVencimiento = fechaVencimientoFromParts
     } else if (vencimiento.modo === 'calcular') {
       fechaVencimiento = calculatedDate
     } else if (vencimiento.modo === 'anio') {
@@ -190,36 +152,46 @@ function FormularioIndividual() {
     const precioCliente = Number(form.precioCliente || 0)
 
     const prodResult = await registrarProducto({
-      codigoBarras: form.codigoBarras || '',
+      codigoBarras: '',
       nombre: form.producto,
       categoria: form.tipo,
       precioCliente: precioCliente || price,
       imagen: form.linkImagen,
     })
 
-    // No registramos en Inventario_Lotes para ingresos individuales (stock existente)
-    // Solo registramos en Maestro_Productos para el catálogo
-    // Si necesitas registrar el lote físico, usa "Por Factura" en lugar de "Individual"
-
-    setStatus(prodResult.success ? 'success' : 'error')
-    setMessage(prodResult.message)
-
-    if (prodResult.success) {
-      setForm({
-        codigoBarras: '',
-        tipo: '',
-        producto: '',
-        detalle: '',
-        cantidad: 1,
-        precioUnitario: '',
-        precioCliente: '',
-        priceMode: 'neto',
-        linkImagen: '',
-      })
-      setVencimiento({ modo: 'fecha', fechaVencimiento: '', fechaElaboracion: '', mesesDuracion: 6, anioVencimiento: '' })
-      setCalculatedDate('')
-      setTimeout(() => setStatus('idle'), 3000)
+    if (!prodResult.success) {
+      setStatus('error')
+      setMessage(prodResult.message)
+      return
     }
+
+    const loteResult = await registrarLote({
+      codigoBarras: '',
+      producto: form.producto,
+      tipo: form.tipo,
+      detalle: form.detalle,
+      cantidad: form.cantidad,
+      fechaVencimiento,
+      fechaElaboracion: vencimiento.fechaElaboracion,
+      mesesDuracion: vencimiento.mesesDuracion,
+      costoNetoUnitario: form.priceMode === 'neto' ? price : Math.round(price / 1.19),
+      ivaCredito: totals.iva,
+      totalFactura: totals.total,
+      linkImagen: form.linkImagen,
+    })
+
+    if (loteResult.success) {
+      setStatus('success')
+      setMessage('Producto registrado en catálogo y vencimientos ✔')
+      setForm({ tipo: '', producto: '', detalle: '', cantidad: 1, precioUnitario: '', precioCliente: '', priceMode: 'neto', linkImagen: '' })
+      setVencimiento({ modo: 'fecha', fechaVencimiento: '', fechaElaboracion: '', mesesDuracion: 6, anioVencimiento: '' })
+      setFechaParts({ day: '01', month: String(new Date().getMonth() + 1).padStart(2, '0'), year: String(new Date().getFullYear()) })
+      setCalculatedDate('')
+    } else {
+      setStatus('error')
+      setMessage('Producto registrado en catálogo, pero falló en vencimientos')
+    }
+    setTimeout(() => setStatus('idle'), 4000)
   }
 
   return (
@@ -244,17 +216,6 @@ function FormularioIndividual() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="label-field">Código de Barras (opcional)</label>
-          <input
-            type="text"
-            value={form.codigoBarras}
-            onChange={(e) => setForm((p) => ({ ...p, codigoBarras: e.target.value }))}
-            className="input-field"
-            placeholder="8400000000000"
-          />
-        </div>
-
-        <div>
           <label className="label-field">Tipo de Producto *</label>
           <select
             value={form.tipo}
@@ -276,7 +237,7 @@ function FormularioIndividual() {
             value={form.producto}
             onChange={(e) => setForm((p) => ({ ...p, producto: e.target.value }))}
             className="input-field"
-            placeholder="Ej: Vienesa Frankfurt"
+            placeholder="Ej: De Todito 64g"
             required
           />
         </div>
@@ -429,24 +390,17 @@ function FormularioIndividual() {
             <div>
               <label className="label-field">Fecha de Vencimiento</label>
               <div className="flex gap-2">
-                <select value={fechaParts.day} onChange={(e)=>{ setFechaParts(p => ({ ...p, day: e.target.value })); setVencimiento((pp)=>({ ...pp, fechaVencimiento: `${fechaParts.year}-${fechaParts.month}-${e.target.value}` })); }} className="input-field">
-                  {Array.from({ length: 31 }, (_, i) => (
-                    <option key={i+1} value={String(i+1).padStart(2,'0')}>{String(i+1).padStart(2,'0')}</option>
-                  ))}
+                <select value={fechaParts.day} onChange={(e) => setFechaParts((p) => ({ ...p, day: e.target.value }))} className="input-field">
+                  {DIAS.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
-                <select value={fechaParts.month} onChange={(e)=>{ setFechaParts(p => ({ ...p, month: e.target.value })); setVencimiento((pp)=>({ ...pp, fechaVencimiento: `${fechaParts.year}-${e.target.value}-${fechaParts.day}` })); }} className="input-field">
-                  {Array.from({ length: 12 }, (_, i) => (
-                    <option key={i+1} value={String(i+1).padStart(2,'0')}>{String(i+1).padStart(2,'0')}</option>
-                  ))}
+                <select value={fechaParts.month} onChange={(e) => setFechaParts((p) => ({ ...p, month: e.target.value }))} className="input-field">
+                  {MESES.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
-                <select value={fechaParts.year} onChange={(e)=>{ setFechaParts(p => ({ ...p, year: e.target.value })); setVencimiento((pp)=>({ ...pp, fechaVencimiento: `${e.target.value}-${fechaParts.month}-${fechaParts.day}` })); }} className="input-field">
-                  {Array.from({ length: 12 }, (_, i) => {
-                    const y = Number(new Date().getFullYear()) - 0 + i
-                    return <option key={y} value={String(y)}>{y}</option>
-                  })}
+                <select value={fechaParts.year} onChange={(e) => setFechaParts((p) => ({ ...p, year: e.target.value }))} className="input-field">
+                  {ANIOS.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
-              <p className="text-xs text-gray-400 mt-1">Fecha seleccionada: {fechaParts.year}-{fechaParts.month}-{fechaParts.day}</p>
+              <p className="text-xs text-gray-400 mt-1">Seleccionada: {fechaVencimientoFromParts}</p>
             </div>
           )}
 
@@ -528,9 +482,8 @@ function FormularioIndividual() {
 function FormularioFactura() {
   const [items, setItems] = useState<LoteItem[]>([
     {
-      id: '1', codigoBarras: '', producto: '', tipo: '', detalle: '',
+      id: '1', producto: '', tipo: '', detalle: '',
       cantidad: 1, fechaVencimiento: '', fechaElaboracion: '', mesesDuracion: 6,
-      anioVencimiento: '', dateMode: 'fecha',
       precioUnitario: 0, priceMode: 'neto', linkImagen: '',
     },
   ])
@@ -552,9 +505,8 @@ function FormularioFactura() {
     setItems((p) => [
       ...p,
       {
-        id: Date.now().toString(), codigoBarras: '', producto: '', tipo: '', detalle: '',
+        id: Date.now().toString(), producto: '', tipo: '', detalle: '',
         cantidad: 1, fechaVencimiento: '', fechaElaboracion: '', mesesDuracion: 6,
-        anioVencimiento: '', dateMode: 'fecha',
         precioUnitario: 0, priceMode: 'neto', linkImagen: '',
       },
     ])
@@ -593,7 +545,7 @@ function FormularioFactura() {
       }
       const t = calcTotals(item.precioUnitario, item.cantidad, item.priceMode)
       return {
-        codigoBarras: item.codigoBarras || '',
+        codigoBarras: '',
         producto: item.producto,
         tipo: item.tipo,
         detalle: item.detalle,
@@ -614,9 +566,8 @@ function FormularioFactura() {
     if (result.success) {
       setItems([
         {
-          id: '1', codigoBarras: '', producto: '', tipo: '', detalle: '',
+          id: '1', producto: '', tipo: '', detalle: '',
           cantidad: 1, fechaVencimiento: '', fechaElaboracion: '', mesesDuracion: 6,
-          anioVencimiento: '', dateMode: 'fecha',
           precioUnitario: 0, priceMode: 'neto', linkImagen: '',
         },
       ])
@@ -663,8 +614,6 @@ function FormularioFactura() {
           </button>
         </div>
       </div>
-
-      {vencimientoModo === 'igual' && vencimientoIgual.modo === 'fecha' ? null : null}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {items.map((item, idx) => {

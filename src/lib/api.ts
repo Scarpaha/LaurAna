@@ -65,8 +65,6 @@ const num = (val: unknown): number => {
 
 function parseFlexibleDate(raw: unknown): string {
   if (!raw) return ''
-  
-  // Handle Date objects from Sheets
   if (raw instanceof Date) {
     const d = raw as Date
     if (isNaN(d.getTime())) return ''
@@ -75,11 +73,8 @@ function parseFlexibleDate(raw: unknown): string {
     const day = String(d.getDate()).padStart(2, '0')
     return `${year}-${month}-${day}`
   }
-  
   const s = String(raw).trim()
   if (!s) return ''
-
-  // Handle ISO format like "2026-06-08T04:00:00.000Z"
   if (s.includes('T') && s.includes('Z')) {
     const d = new Date(s)
     if (!isNaN(d.getTime())) {
@@ -89,8 +84,6 @@ function parseFlexibleDate(raw: unknown): string {
       return `${year}-${month}-${day}`
     }
   }
-
-  // Try standard ISO first
   const d = new Date(s + 'T12:00:00')
   if (!isNaN(d.getTime())) {
     const year = d.getFullYear()
@@ -98,14 +91,12 @@ function parseFlexibleDate(raw: unknown): string {
     const day = String(d.getDate()).padStart(2, '0')
     return `${year}-${month}-${day}`
   }
-
   const parts = s.split(/[-/.\s]/)
-  
   if (parts.length === 3) {
     const combos = [
-      [2, 1, 0],  // DD-MM-YYYY (most common in Chile)
-      [1, 0, 2],  // MM-DD-YYYY
-      [0, 1, 2],  // YYYY-MM-DD
+      [2, 1, 0],
+      [1, 0, 2],
+      [0, 1, 2],
     ]
     for (const [di, mi, yi] of combos) {
       let day = Number(parts[di])
@@ -120,18 +111,15 @@ function parseFlexibleDate(raw: unknown): string {
       }
     }
   }
-  
   if (parts.length === 2) {
     const yearPart = parts.find(p => p.length === 4 && Number(p) >= 2000 && Number(p) <= 2100)
     if (yearPart) {
       return `${yearPart}-01-01`
     }
   }
-  
   if (parts.length === 1 && Number(parts[0]) >= 2000 && Number(parts[0]) <= 2100) {
     return `${parts[0]}-01-01`
   }
-  
   return s
 }
 
@@ -175,7 +163,6 @@ async function writeRow(sheetName: string, values: unknown[]): Promise<{ success
 }
 
 export async function fetchMaestroProductos(): Promise<Producto[]> {
-  // Cargar maestros desde Maestro_Productos
   const rows = await readSheet('Maestro_Productos')
   const base = (rows || []).map((item) => {
     const values = Object.values(item)
@@ -189,16 +176,13 @@ export async function fetchMaestroProductos(): Promise<Producto[]> {
     }
   })
 
-  // Fusionar con Inventario_Lotes para incluir productos que existen solo en el stock
   const lotes = await fetchInventarioLotes()
   const merged = [...base]
-  const seen = new Set<string>(base.map((p) => p.nombre))
+  const seen = new Set<string>(base.map((p) => p.nombre.toLowerCase().trim()))
   for (const lote of lotes) {
     if (!lote.producto) continue
-    // Normalizar nombre para evitar duplicados por espacios
-    const normLote = lote.producto.trim()
-    const exists = Array.from(seen).some(n => n.trim() === normLote)
-    if (!exists) {
+    const key = lote.producto.toLowerCase().trim()
+    if (!seen.has(key)) {
       merged.push({
         codigoBarras: lote.codigoBarras,
         nombre: lote.producto,
@@ -207,21 +191,22 @@ export async function fetchMaestroProductos(): Promise<Producto[]> {
         precioCliente: 0,
         imagen: lote.linkImagen ? convertDriveImageUrl(lote.linkImagen) : convertDriveImageUrl(''),
       } as Producto)
-      seen.add(lote.producto)
+      seen.add(key)
     }
   }
 
-  // Eliminar duplicados por nombre (por seguridad, conserva la primera aparición)
   const unique = new Map<string, Producto>()
   for (const p of merged) {
-    if (!unique.has(p.nombre.trim())) unique.set(p.nombre.trim(), p)
+    const key = p.nombre.toLowerCase().trim()
+    if (!unique.has(key)) unique.set(key, p)
   }
   return Array.from(unique.values())
 }
 
 export async function fetchCajaDiaria(): Promise<VentaDiaria[]> {
   const rows = await readSheet('Caja_Diaria')
-  return rows.map((item) => {
+  const grouped: Record<string, { ventaBoleta: number; ventaSinBoleta: number; consumoPropio: number }> = {}
+  for (const item of rows) {
     const fechaRaw = item['Fecha']
     let fecha = ''
     if (fechaRaw) {
@@ -231,18 +216,21 @@ export async function fetchCajaDiaria(): Promise<VentaDiaria[]> {
       }
     }
     if (!fecha && typeof fechaRaw === 'string') fecha = fechaRaw.trim()
-    
-    const vb = num(item['Venta con Boleta'])
-    const vsb = num(item['Venta sin Boleta'])
-    const cp = num(item['Consumo Propio'])
-    return {
-      fecha,
-      ventaBoleta: vb,
-      ventaSinBoleta: vsb,
-      consumoPropio: cp,
-      totalDia: vb + vsb + cp,
+    if (!fecha) continue
+    if (!grouped[fecha]) {
+      grouped[fecha] = { ventaBoleta: 0, ventaSinBoleta: 0, consumoPropio: 0 }
     }
-  }).filter((v) => v.fecha)
+    grouped[fecha].ventaBoleta += num(item['Venta con Boleta'])
+    grouped[fecha].ventaSinBoleta += num(item['Venta sin Boleta'])
+    grouped[fecha].consumoPropio += num(item['Consumo Propio'])
+  }
+  return Object.entries(grouped).map(([fecha, vals]) => ({
+    fecha,
+    ventaBoleta: vals.ventaBoleta,
+    ventaSinBoleta: vals.ventaSinBoleta,
+    consumoPropio: vals.consumoPropio,
+    totalDia: vals.ventaBoleta + vals.ventaSinBoleta + vals.consumoPropio,
+  }))
 }
 
 export async function registrarVentaDiaria(venta: {
@@ -277,12 +265,7 @@ export async function updateCajaDiaria(venta: {
   ])
 }
 
-export async function deleteCajaDiaria(_fecha: string): Promise<{ success: boolean; message: string }> {
-  return { success: false, message: 'Eliminar requiere Apps Script con lógica de borrado. Por ahora, edita y pon todo en 0.' }
-}
-
-// Nueva función para anular ventas de un día (agrega valores negativos para cancelar el total)
-export async function anularVentaDiaria(venta: {
+export async function deleteCajaDiaria(venta: {
   fecha: string
   ventaBoleta: number
   ventaSinBoleta: number
@@ -315,12 +298,71 @@ export async function registrarProducto(producto: {
   ])
 }
 
-// Registro simple de eliminación para auditoría (no elimina de Maestro_Productos directamente, se puede ampliar con Apps Script)
-export async function eliminarProducto(codigoBarras: string): Promise<{ success: boolean; message: string }> {
-  // Guardar en una hoja de auditoría para eliminación futura
-  const fecha = new Date().toISOString()
-  const res = await writeRow('Productos_Eliminados', [codigoBarras, fecha, 'Eliminado por admin'])
-  return res
+export async function registrarLote(lote: {
+  codigoBarras: string
+  producto: string
+  tipo: string
+  detalle: string
+  cantidad: number
+  fechaVencimiento: string
+  fechaElaboracion: string
+  mesesDuracion: number
+  costoNetoUnitario: number
+  ivaCredito: number
+  totalFactura: number
+  linkImagen: string
+}): Promise<{ success: boolean; message: string }> {
+  return writeRow('Inventario_Lotes', [
+    lote.codigoBarras,
+    lote.producto,
+    lote.cantidad,
+    lote.fechaVencimiento,
+    lote.fechaElaboracion,
+    lote.mesesDuracion,
+    lote.fechaVencimiento,
+    lote.costoNetoUnitario,
+    lote.ivaCredito,
+    lote.totalFactura,
+    'Activo',
+    lote.linkImagen,
+  ])
+}
+
+export async function registrarLotesMultiple(lotes: Array<{
+  codigoBarras: string
+  producto: string
+  tipo: string
+  detalle: string
+  cantidad: number
+  fechaVencimiento: string
+  fechaElaboracion: string
+  mesesDuracion: number
+  costoNetoUnitario: number
+  ivaCredito: number
+  totalFactura: number
+  linkImagen: string
+}>): Promise<{ success: boolean; message: string }> {
+  for (const lote of lotes) {
+    await registrarLote(lote)
+  }
+  return { success: true, message: `${lotes.length} productos registrados` }
+}
+
+export async function eliminarLote(producto: string, fechaVencimiento: string): Promise<{ success: boolean; message: string }> {
+  return writeRow('Inventario_Lotes', [
+    '',
+    producto,
+    0,
+    fechaVencimiento,
+    '',
+    0,
+    fechaVencimiento,
+    0,
+    0,
+    0,
+    'Eliminado',
+    '',
+  ])
 }
 
 export async function fetchPanelPapa(): Promise<PanelPapa | null> {
@@ -344,7 +386,6 @@ export async function fetchInventarioLotes(): Promise<LoteInventario[]> {
     const vencimientoFinal = item['Vencimiento Final'] instanceof Date
       ? (item['Vencimiento Final'] as Date).toISOString().split('T')[0]
       : parseFlexibleDate(item['Vencimiento Final'] || item['Fecha Vencimiento'])
-
     return {
       codigoBarras: str(item['Código de Barras']),
       producto: str(item['Producto']),
@@ -362,57 +403,6 @@ export async function fetchInventarioLotes(): Promise<LoteInventario[]> {
       linkImagen: convertDriveImageUrl(str(item['Link de la Imagen'])),
     }
   }).filter((l) => l.producto)
-}
-
-export async function registrarLote(lote: {
-  codigoBarras: string
-  producto: string
-  tipo: string
-  detalle: string
-  cantidad: number
-  fechaVencimiento: string
-  fechaElaboracion: string
-  mesesDuracion: number
-  costoNetoUnitario: number
-  ivaCredito: number
-  totalFactura: number
-  linkImagen: string
-}): Promise<{ success: boolean; message: string }> {
-  // Orden según columnas: Código de Barras|Producto|Cantidad|Fecha Vencimiento|Fecha Elaboración|Meses Duración|Vencimiento Final|Costo Neto Unitario|IVA Crédito (19%)|Total Factura Lote|Estado|Link de la Imagen
-  return writeRow('Inventario_Lotes', [
-    lote.codigoBarras,      // 1: Código de Barras
-    lote.producto,            // 2: Producto
-    lote.cantidad,            // 3: Cantidad
-    lote.fechaVencimiento,    // 4: Fecha Vencimiento
-    lote.fechaElaboracion,    // 5: Fecha Elaboración
-    lote.mesesDuracion,       // 6: Meses Duración
-    lote.fechaVencimiento,    // 7: Vencimiento Final (igual a Fecha Vencimiento)
-    lote.costoNetoUnitario,   // 8: Costo Neto Unitario
-    lote.ivaCredito,         // 9: IVA Crédito (19%)
-    lote.totalFactura,        // 10: Total Factura Lote
-    'Activo',                 // 11: Estado
-    lote.linkImagen,         // 12: Link de la Imagen
-  ])
-}
-
-export async function registrarLotesMultiple(lotes: Array<{
-  codigoBarras: string
-  producto: string
-  tipo: string
-  detalle: string
-  cantidad: number
-  fechaVencimiento: string
-  fechaElaboracion: string
-  mesesDuracion: number
-  costoNetoUnitario: number
-  ivaCredito: number
-  totalFactura: number
-  linkImagen: string
-}>): Promise<{ success: boolean; message: string }> {
-  for (const lote of lotes) {
-    await registrarLote(lote)
-  }
-  return { success: true, message: `${lotes.length} productos registrados` }
 }
 
 export function calcularVencimientoFinal(

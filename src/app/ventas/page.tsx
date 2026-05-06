@@ -10,7 +10,7 @@ import {
   type VentaDiaria,
   type PanelPapa,
 } from '@/lib/api'
-import { Target, DollarSign, TrendingUp, Loader2, Printer, Edit2, Trash2, Check, X, Calendar } from 'lucide-react'
+import { Loader2, Printer, Edit2, Trash2, Check, X, Calendar } from 'lucide-react'
 
 type Mode = 'boleta' | 'sinboleta' | 'consumo'
 
@@ -24,24 +24,28 @@ function fmtDate(raw: string): string {
   return `${dd}-${mm}-${yyyy}`
 }
 
+const DIAS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'))
+const MESES = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
+const ANIOS = Array.from({ length: 5 }, (_, i) => String(new Date().getFullYear() - 1 + i))
+const MES_NAMES: Record<string, string> = {
+  '01': 'Ene', '02': 'Feb', '03': 'Mar', '04': 'Abr', '05': 'May', '06': 'Jun',
+  '07': 'Jul', '08': 'Ago', '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dic',
+}
+
 export default function VentasPage() {
   const [panel, setPanel] = useState<PanelPapa | null>(null)
   const [ventas, setVentas] = useState<VentaDiaria[]>([])
   const [loading, setLoading] = useState(true)
-  // Listado de fechas para elegir por listado (30 días)
-  const todayInitial = new Date().toISOString().slice(0, 10)
-  const dateOptions: string[] = []
-  const baseDate = new Date()
-  for (let i = 0; i < 30; i++) {
-    const d = new Date(baseDate)
-    d.setDate(baseDate.getDate() + i)
-    dateOptions.push(d.toISOString().slice(0, 10))
-  }
-  const [selectedDate, setSelectedDate] = useState<string>(todayInitial)
+
+  const today = new Date()
+  const [selDia, setSelDia] = useState(String(today.getDate()).padStart(2, '0'))
+  const [selMes, setSelMes] = useState(String(today.getMonth() + 1).padStart(2, '0'))
+  const [selAnio, setSelAnio] = useState(String(today.getFullYear()))
+  const selectedDate = `${selAnio}-${selMes}-${selDia}`
+
   const [mode, setMode] = useState<Mode>('boleta')
   const [input, setInput] = useState('')
   const [toast, setToast] = useState<string | null>(null)
-
   const [editingDate, setEditingDate] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ ventaBoleta: 0, ventaSinBoleta: 0, consumoPropio: 0 })
 
@@ -70,10 +74,8 @@ export default function VentasPage() {
   const handleAdd = async () => {
     const amount = Number(input)
     if (!amount || amount <= 0) return
-
     const existing = ventas.find((v) => v.fecha === selectedDate)
     let payload: { fecha: string; ventaBoleta: number; ventaSinBoleta: number; consumoPropio: number }
-
     if (existing) {
       payload = {
         fecha: selectedDate,
@@ -89,7 +91,6 @@ export default function VentasPage() {
         consumoPropio: mode === 'consumo' ? amount : 0,
       }
     }
-
     const result = await registrarVentaDiaria(payload)
     if (result.success) {
       showToast('Agregado correctamente ✔')
@@ -102,11 +103,7 @@ export default function VentasPage() {
 
   const startEdit = (v: VentaDiaria) => {
     setEditingDate(v.fecha)
-    setEditForm({
-      ventaBoleta: v.ventaBoleta,
-      ventaSinBoleta: v.ventaSinBoleta,
-      consumoPropio: v.consumoPropio,
-    })
+    setEditForm({ ventaBoleta: v.ventaBoleta, ventaSinBoleta: v.ventaSinBoleta, consumoPropio: v.consumoPropio })
   }
 
   const cancelEdit = () => setEditingDate(null)
@@ -123,11 +120,11 @@ export default function VentasPage() {
     }
   }
 
-  const handleDelete = async (fecha: string) => {
-    if (!confirm(`¿Eliminar la venta del ${fmtDate(fecha)}?`)) return
-    const result = await deleteCajaDiaria(fecha)
+  const handleDelete = async (v: VentaDiaria) => {
+    if (!confirm(`¿Anular la venta del ${fmtDate(v.fecha)}?`)) return
+    const result = await deleteCajaDiaria({ fecha: v.fecha, ventaBoleta: v.ventaBoleta, ventaSinBoleta: v.ventaSinBoleta, consumoPropio: v.consumoPropio })
     if (result.success) {
-      showToast('Eliminado correctamente ✔')
+      showToast('Venta anulada ✔ (se registró como negativo)')
       reload()
     } else {
       showToast(result.message)
@@ -143,7 +140,7 @@ export default function VentasPage() {
   const handlePrint = () => window.print()
 
   const totalMes = ventas
-    .filter((v) => v.fecha.startsWith(selectedDate.substring(0, 7)))
+    .filter((v) => v.fecha.startsWith(`${selAnio}-${selMes}`))
     .reduce((sum, v) => sum + v.ventaBoleta + v.ventaSinBoleta + v.consumoPropio, 0)
 
   const selectedVenta = ventas.find((v) => v.fecha === selectedDate)
@@ -207,11 +204,17 @@ export default function VentasPage() {
       <div className="card print:hidden">
         <div className="mb-4">
           <label className="label-field flex items-center gap-2"><Calendar className="w-5 h-5" />Fecha</label>
-          <select value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="input-field">
-            {dateOptions.map((d) => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
+          <div className="flex gap-2">
+            <select value={selDia} onChange={(e) => setSelDia(e.target.value)} className="input-field flex-1">
+              {DIAS.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <select value={selMes} onChange={(e) => setSelMes(e.target.value)} className="input-field flex-1">
+              {MESES.map(m => <option key={m} value={m}>{MES_NAMES[m]}</option>)}
+            </select>
+            <select value={selAnio} onChange={(e) => setSelAnio(e.target.value)} className="input-field flex-1">
+              {ANIOS.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+          </div>
         </div>
 
         <div className="flex gap-2 mb-4">
@@ -297,7 +300,7 @@ export default function VentasPage() {
                           <td className="p-3 print:hidden">
                             <div className="flex gap-1 justify-end">
                               <button onClick={() => startEdit(v)} className="p-1 text-lavanda hover:bg-purple-100 rounded"><Edit2 className="w-5 h-5" /></button>
-                              <button onClick={() => handleDelete(v.fecha)} className="p-1 text-error hover:bg-red-100 rounded"><Trash2 className="w-5 h-5" /></button>
+                              <button onClick={() => handleDelete(v)} className="p-1 text-error hover:bg-red-100 rounded"><Trash2 className="w-5 h-5" /></button>
                             </div>
                           </td>
                         </>

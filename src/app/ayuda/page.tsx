@@ -91,26 +91,27 @@ const seniorItems: AccordionItem[] = [
     content: (
       <>
         <ol className="list-decimal list-inside space-y-2">
+          <li>Elige la fecha con los 3 listados: <strong>Día</strong>, <strong>Mes</strong> y <strong>Año</strong>.</li>
           <li>Elige el tipo de venta: <strong>Venta con Boleta</strong>, <strong>Venta sin Boleta</strong> o <strong>Consumo Propio</strong>.</li>
           <li>Usa el <strong>teclado numérico</strong> grande para escribir el monto.</li>
           <li>Presiona <strong>&quot;Agregar al Día&quot;</strong>.</li>
         </ol>
-        <p>El sistema suma automáticamente al total del día y del mes. Si te equivocaste, puedes <strong>editar</strong> o <strong>eliminar</strong> cualquier día en la tabla de abajo.</p>
+        <p>El sistema suma automáticamente al total del día y del mes.</p>
         <p className="text-sm text-gray-500">El botón ⌫ borra el último número. El botón &quot;Limpiar&quot; borra todo.</p>
       </>
     ),
   },
   {
-    title: 'Editar y Eliminar ventas',
+    title: 'Editar y Anular ventas',
     icon: <Calculator className="w-6 h-6 text-lavanda" />,
     content: (
       <>
         <p>En la tabla de historial, cada día tiene dos botones:</p>
         <ul className="list-disc list-inside space-y-1">
           <li><strong>Lápiz (Editar):</strong> Cambia los montos de ese día directamente.</li>
-          <li><strong>Basurero (Eliminar):</strong> Borra completamente ese día (pide confirmación).</li>
+          <li><strong>Basurero (Anular):</strong> Registra una venta negativa que cancela el total de ese día.</li>
         </ul>
-        <p className="text-sm text-gray-500">Si agregaste algo dos veces, solo edita el día y corrige el número.</p>
+        <p className="text-sm text-gray-500">Si te equivocaste, puedes editar y corregir. Si quieres cancelar un día completo, usa Anular.</p>
       </>
     ),
   },
@@ -138,9 +139,10 @@ const adminItems: AccordionItem[] = [
           <li>Agrega un <strong>Detalle</strong> si quieres (marca, pack, etc.).</li>
           <li>Pon la <strong>Cantidad</strong>.</li>
           <li>Elige si ingresas <strong>Valor Neto</strong> o <strong>Valor Total</strong> (con IVA). El sistema calcula el resto automáticamente.</li>
-          <li>Para el vencimiento: si tiene fecha, ponla. Si no, pon fecha de elaboración + meses.</li>
+          <li>Para el vencimiento, elige entre: <strong>Fecha exacta</strong> (con 3 listados: Día, Mes, Año), <strong>Calcular</strong> (desde elaboración + meses) o <strong>Solo año</strong>.</li>
           <li>Presiona <strong>&quot;Registrar Producto&quot;</strong>.</li>
         </ol>
+        <p className="text-exito font-semibold">El producto queda registrado en el catálogo Y en vencimientos.</p>
       </>
     ),
   },
@@ -185,6 +187,17 @@ const vencimientoItems: AccordionItem[] = [
           </div>
         </div>
         <p>Toca los números de arriba para filtrar. Cada tarjeta muestra: nombre, tipo, cantidad, fecha y días restantes.</p>
+      </>
+    ),
+  },
+  {
+    title: 'Eliminar producto de Vencimientos',
+    icon: <AlertTriangle className="w-6 h-6 text-error" />,
+    content: (
+      <>
+        <p>Cada tarjeta tiene un botón de <strong>basurero</strong> en la esquina inferior.</p>
+        <p>Sirve para marcar un producto como <strong>&quot;vendido&quot;</strong> o <strong>&quot;merma&quot;</strong> cuando ya no necesitas verlo en la lista.</p>
+        <p>Esto registra el estado como &quot;Eliminado&quot; en la hoja de cálculo para que no aparezca más.</p>
       </>
     ),
   },
