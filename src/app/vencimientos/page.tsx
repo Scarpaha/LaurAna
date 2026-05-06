@@ -1,20 +1,81 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { fetchInventarioLotes, eliminarLote, diasParaVencer, type LoteInventario } from '@/lib/api'
-import { AlertTriangle, Loader2, PackageX, Calendar, Trash2 } from 'lucide-react'
+import { fetchInventarioLotes, fetchMaestroProductos, eliminarLote, diasParaVencer, type LoteInventario, type Producto } from '@/lib/api'
+import { AlertTriangle, Loader2, PackageX, Calendar, Trash2, Minus, Plus } from 'lucide-react'
+
+function calcularDesdeMeses(meses: number): string {
+  const hoy = new Date()
+  hoy.setMonth(hoy.getMonth() + meses)
+  return hoy.toISOString().split('T')[0]
+}
+
+interface VencimientoItem {
+  producto: string
+  tipo: string
+  detalle: string
+  cantidad: number
+  fechaUsar: string
+  diasParaVencer: number
+  imagen: string
+  fuente: 'lote' | 'maestro'
+  fechaVencimiento: string
+}
 
 export default function VencimientosPage() {
-  const [lotes, setLotes] = useState<LoteInventario[]>([])
+  const [items, setItems] = useState<VencimientoItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'todos' | 'critico' | 'alerta' | 'ok'>('todos')
   const [toast, setToast] = useState<string | null>(null)
+  const [eliminarCantidad, setEliminarCantidad] = useState<Record<string, number>>({})
 
   useEffect(() => {
     const load = async () => {
       setLoading(true)
-      const data = await fetchInventarioLotes()
-      setLotes(data)
+      const [lotes, maestro] = await Promise.all([
+        fetchInventarioLotes(),
+        fetchMaestroProductos(),
+      ])
+      const merged: VencimientoItem[] = []
+      for (const l of lotes) {
+        if (l.estado === 'Eliminado' || l.cantidad <= 0) continue
+        const fechaUsar = l.vencimientoFinal || l.fechaVencimiento
+        if (!fechaUsar) continue
+        const dias = diasParaVencer(fechaUsar)
+        merged.push({
+          producto: l.producto,
+          tipo: l.tipo,
+          detalle: l.detalle,
+          cantidad: l.cantidad,
+          fechaUsar,
+          diasParaVencer: dias,
+          imagen: l.linkImagen,
+          fuente: 'lote',
+          fechaVencimiento: fechaUsar,
+        })
+      }
+      for (const p of maestro) {
+        const key = p.nombre.toLowerCase().trim()
+        const alreadyInLotes = merged.some((m) => m.producto.toLowerCase().trim() === key && m.fuente === 'lote')
+        if (!alreadyInLotes && p.mesesDuracionEstandar > 0) {
+          const fechaUsar = calcularDesdeMeses(p.mesesDuracionEstandar)
+          if (fechaUsar) {
+            const dias = diasParaVencer(fechaUsar)
+            merged.push({
+              producto: p.nombre,
+              tipo: p.categoria,
+              detalle: '',
+              cantidad: 0,
+              fechaUsar,
+              diasParaVencer: dias,
+              imagen: p.imagen,
+              fuente: 'maestro',
+              fechaVencimiento: fechaUsar,
+            })
+          }
+        }
+      }
+      setItems(merged)
       setLoading(false)
     }
     load()
@@ -25,26 +86,73 @@ export default function VencimientosPage() {
     setTimeout(() => setToast(null), 2500)
   }
 
-  const handleEliminar = async (lote: LoteInventario) => {
-    if (!confirm(`¿Marcar "${lote.producto}" como eliminado/merma?`)) return
-    const result = await eliminarLote(lote.producto, lote.vencimientoFinal || lote.fechaVencimiento)
+  const ajustarCantidad = (producto: string, fecha: string, delta: number) => {
+    const key = `${producto}|${fecha}`
+    setEliminarCantidad((prev) => {
+      const current = prev[key] || 0
+      const nuevo = Math.max(0, current + delta)
+      return { ...prev, [key]: nuevo }
+    })
+  }
+
+  const handleEliminar = async (item: VencimientoItem) => {
+    const key = `${item.producto}|${item.fechaUsar}`
+    const cantidad = eliminarCantidad[key] || 1
+    if (!confirm(`¿Eliminar ${cantidad} unidad(es) de "${item.producto}"?`)) return
+    const result = await eliminarLote(item.producto, item.fechaVencimiento, cantidad)
     if (result.success) {
-      showToast('Producto marcado como eliminado ✔')
+      showToast(`${cantidad} unidad(es) marcada(s) como eliminada(s) ✔`)
+      setEliminarCantidad((prev) => {
+        const copy = { ...prev }
+        delete copy[key]
+        return copy
+      })
       const data = await fetchInventarioLotes()
-      setLotes(data)
+      const maestro = await fetchMaestroProductos()
+      const merged: VencimientoItem[] = []
+      for (const l of data) {
+        if (l.estado === 'Eliminado' || l.cantidad <= 0) continue
+        const fechaUsar = l.vencimientoFinal || l.fechaVencimiento
+        if (!fechaUsar) continue
+        const dias = diasParaVencer(fechaUsar)
+        merged.push({
+          producto: l.producto,
+          tipo: l.tipo,
+          detalle: l.detalle,
+          cantidad: l.cantidad,
+          fechaUsar,
+          diasParaVencer: dias,
+          imagen: l.linkImagen,
+          fuente: 'lote',
+          fechaVencimiento: fechaUsar,
+        })
+      }
+      for (const p of maestro) {
+        const key2 = p.nombre.toLowerCase().trim()
+        const alreadyInLotes = merged.some((m) => m.producto.toLowerCase().trim() === key2 && m.fuente === 'lote')
+        if (!alreadyInLotes && p.mesesDuracionEstandar > 0) {
+          const fechaUsar2 = calcularDesdeMeses(p.mesesDuracionEstandar)
+          if (fechaUsar2) {
+            const dias2 = diasParaVencer(fechaUsar2)
+            merged.push({
+              producto: p.nombre,
+              tipo: p.categoria,
+              detalle: '',
+              cantidad: 0,
+              fechaUsar: fechaUsar2,
+              diasParaVencer: dias2,
+              imagen: p.imagen,
+              fuente: 'maestro',
+              fechaVencimiento: fechaUsar2,
+            })
+          }
+        }
+      }
+      setItems(merged)
     }
   }
 
-  const lotsWithDays = lotes
-    .filter(l => l.estado !== 'Eliminado' && l.cantidad > 0)
-    .map((lote) => {
-      const fechaUsar = lote.vencimientoFinal || lote.fechaVencimiento
-      const dias = diasParaVencer(fechaUsar)
-      return { ...lote, diasParaVencer: dias, fechaUsar }
-    })
-    .filter((l) => l.fechaUsar)
-
-  const sorted = [...lotsWithDays].sort((a, b) => a.diasParaVencer - b.diasParaVencer)
+  const sorted = [...items].sort((a, b) => a.diasParaVencer - b.diasParaVencer)
 
   const filtered = sorted.filter((l) => {
     if (filter === 'todos') return true
@@ -54,9 +162,9 @@ export default function VencimientosPage() {
     return true
   })
 
-  const countCritico = lotsWithDays.filter((l) => l.diasParaVencer <= 7).length
-  const countAlerta = lotsWithDays.filter((l) => l.diasParaVencer > 7 && l.diasParaVencer <= 15).length
-  const countOk = lotsWithDays.filter((l) => l.diasParaVencer > 15).length
+  const countCritico = items.filter((l) => l.diasParaVencer <= 7).length
+  const countAlerta = items.filter((l) => l.diasParaVencer > 7 && l.diasParaVencer <= 15).length
+  const countOk = items.filter((l) => l.diasParaVencer > 15).length
 
   if (loading) {
     return (
@@ -94,7 +202,7 @@ export default function VencimientosPage() {
 
       <div className="flex gap-2">
         <button onClick={() => setFilter('todos')} className={`px-4 py-2 rounded-full font-semibold text-sm transition-all ${filter === 'todos' ? 'bg-carbon text-white' : 'bg-white border border-gray-300'}`}>
-          Ver Todos ({lotsWithDays.length})
+          Ver Todos ({items.length})
         </button>
       </div>
 
@@ -105,28 +213,30 @@ export default function VencimientosPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((lote) => {
-            const isCritico = lote.diasParaVencer <= 7
-            const isAlerta = lote.diasParaVencer > 7 && lote.diasParaVencer <= 15
+          {filtered.map((item) => {
+            const isCritico = item.diasParaVencer <= 7
+            const isAlerta = item.diasParaVencer > 7 && item.diasParaVencer <= 15
+            const key = `${item.producto}|${item.fechaUsar}`
+            const cantEliminar = eliminarCantidad[key] || 1
             return (
               <div
-                key={lote.codigoBarras + lote.vencimientoFinal + lote.producto}
+                key={key}
                 className={`card border-l-4 ${isCritico ? 'border-error bg-red-50' : isAlerta ? 'border-aviso bg-yellow-50' : 'border-exito'}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-lg">{lote.producto}</span>
-                      {lote.tipo && (
-                        <span className="badge bg-lavanda/30 text-carbon">{lote.tipo}</span>
+                      <span className="font-bold text-lg">{item.producto}</span>
+                      {item.tipo && (
+                        <span className="badge bg-lavanda/30 text-carbon">{item.tipo}</span>
                       )}
                     </div>
-                    {lote.detalle && <p className="text-sm text-gray-500">{lote.detalle}</p>}
+                    {item.detalle && <p className="text-sm text-gray-500">{item.detalle}</p>}
                     <div className="flex items-center gap-4 mt-2 text-sm">
                       <span className="flex items-center gap-1">
                         <Calendar className="w-4 h-4" />
                         Vence: {(() => {
-                          const raw = lote.fechaUsar
+                          const raw = item.fechaUsar
                           if (!raw) return ''
                           const d = new Date(raw + 'T12:00:00')
                           if (!isNaN(d.getTime())) {
@@ -135,16 +245,38 @@ export default function VencimientosPage() {
                           return raw
                         })()}
                       </span>
-                      <span>Cantidad: {lote.cantidad}</span>
+                      <span>Cantidad: {item.cantidad}</span>
                     </div>
                   </div>
                   <div className="flex flex-col items-center gap-2">
                     <div className={`text-center px-4 py-2 rounded-xl ${isCritico ? 'bg-error text-white' : isAlerta ? 'bg-aviso text-carbon' : 'bg-exito/20 text-exito'}`}>
                       <AlertTriangle className="w-5 h-5 mx-auto mb-1" />
-                      <p className="font-extrabold text-xl">{lote.diasParaVencer}</p>
+                      <p className="font-extrabold text-xl">{item.diasParaVencer}</p>
                       <p className="text-xs">días</p>
                     </div>
-                    <button onClick={() => handleEliminar(lote)} className="p-1 text-error hover:bg-red-100 rounded">
+                    {item.fuente === 'lote' && item.cantidad > 0 && (
+                      <div className="flex items-center gap-1 mt-1">
+                        <button
+                          onClick={() => ajustarCantidad(item.producto, item.fechaUsar, -1)}
+                          disabled={cantEliminar <= 1}
+                          className="p-1 rounded bg-white border border-gray-300 disabled:opacity-30"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="text-sm font-bold w-6 text-center">{cantEliminar}</span>
+                        <button
+                          onClick={() => ajustarCantidad(item.producto, item.fechaUsar, 1)}
+                          disabled={cantEliminar >= item.cantidad}
+                          className="p-1 rounded bg-white border border-gray-300 disabled:opacity-30"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => handleEliminar(item)}
+                      className="p-1 text-error hover:bg-red-100 rounded"
+                    >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>

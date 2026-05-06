@@ -48,13 +48,15 @@ export default function CatalogoPage() {
 
       <div className="mb-6 space-y-4">
         <div className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+            <Search className="w-5 h-5 text-gray-400" />
+          </div>
           <input
             type="text"
-            placeholder="Buscar productos..."
+            placeholder="Buscar..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="input-field pl-12"
+            className="input-field pl-12 pr-4 py-4 text-lg"
           />
         </div>
 

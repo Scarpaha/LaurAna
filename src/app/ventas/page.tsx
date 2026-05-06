@@ -231,7 +231,21 @@ export default function VentasPage() {
 
         <div className="text-center mb-4">
           <p className="text-sm text-gray-500 mb-1">Monto a agregar</p>
-          <p className="text-4xl font-extrabold text-rosa-intenso font-mono">${input ? Number(input).toLocaleString('es-CL') : '0'}</p>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={input}
+            onChange={(e) => {
+              const v = e.target.value.replace(/[^0-9]/g, '')
+              setInput(v)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleAdd()
+            }}
+            className="text-4xl font-extrabold text-rosa-intenso font-mono text-center w-full bg-transparent outline-none border-b-2 border-lavanda/30 focus:border-rosa-intenso pb-1"
+            placeholder="0"
+          />
         </div>
 
         <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto mb-4">

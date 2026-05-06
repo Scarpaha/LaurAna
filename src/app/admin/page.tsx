@@ -1,24 +1,30 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   registrarLote,
   registrarLotesMultiple,
   registrarProducto,
   calcularVencimientoFinal,
+  fetchMaestroProductos,
+  fetchInventarioLotes,
+  eliminarLote,
+  actualizarCantidadLote,
 } from '@/lib/api'
 import {
   Package,
   FileText,
+  List,
   Plus,
   Trash2,
   CheckCircle,
   AlertTriangle,
   Calendar,
-  Printer,
+  Edit2,
+  Loader2,
 } from 'lucide-react'
 
-type AdminTab = 'individual' | 'factura'
+type AdminTab = 'individual' | 'factura' | 'todos'
 type PriceMode = 'neto' | 'total'
 type DateMode = 'fecha' | 'calcular' | 'anio'
 
@@ -34,6 +40,240 @@ interface LoteItem {
   precioUnitario: number
   priceMode: PriceMode
   linkImagen: string
+}
+
+interface ProductoUnificado {
+  id: string
+  nombre: string
+  categoria: string
+  tipo: string
+  precioCliente: number
+  cantidad: number
+  fechaVencimiento: string
+  imagen: string
+  fuente: 'maestro' | 'lote'
+}
+
+const TIPOS_PRODUCTO = [
+  'Lácteos', 'Carnes', 'Embutidos', 'Panes', 'Bebidas',
+  'Snacks', 'Aseo', 'Verduras', 'Frutas', 'Enlatados',
+  'Congelados', 'Endulzantes', 'Aceites', 'Harinas', 'Especias', 'Otro',
+]
+
+const DIAS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'))
+const MESES = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
+const ANIOS = Array.from({ length: 12 }, (_, i) => String(new Date().getFullYear() + i))
+
+function calcTotals(precio: number, cantidad: number, mode: PriceMode) {
+  if (mode === 'neto') {
+    const neto = precio * cantidad
+    const iva = Math.round(neto * 0.19)
+    return { neto, iva, total: neto + iva, netoUnitario: precio }
+  }
+  const total = precio * cantidad
+  const neto = Math.round(total / 1.19)
+  const iva = total - neto
+  return { neto, iva, total, netoUnitario: neto / cantidad }
+}
+
+function ListaTodos() {
+  const [productos, setProductos] = useState<ProductoUnificado[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [editIdx, setEditIdx] = useState<number | null>(null)
+  const [editForm, setEditForm] = useState({ precioCliente: 0, cantidad: 0 })
+  const [toast, setToast] = useState<string | null>(null)
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      const [maestro, lotes] = await Promise.all([
+        fetchMaestroProductos(),
+        fetchInventarioLotes(),
+      ])
+      const merged: ProductoUnificado[] = []
+      const seen = new Set<string>()
+      for (const p of maestro) {
+        const key = p.nombre.toLowerCase().trim()
+        if (!seen.has(key)) {
+          merged.push({
+            id: `m-${key}`,
+            nombre: p.nombre,
+            categoria: p.categoria,
+            tipo: p.categoria,
+            precioCliente: p.precioCliente,
+            cantidad: 0,
+            fechaVencimiento: '',
+            imagen: p.imagen,
+            fuente: 'maestro',
+          })
+          seen.add(key)
+        }
+      }
+      for (const l of lotes) {
+        const key = l.producto.toLowerCase().trim()
+        if (seen.has(key)) {
+          const existing = merged.find((m) => m.nombre.toLowerCase().trim() === key)
+          if (existing) {
+            existing.cantidad += l.cantidad
+            if (l.vencimientoFinal || l.fechaVencimiento) {
+              existing.fechaVencimiento = l.vencimientoFinal || l.fechaVencimiento
+            }
+          }
+        } else {
+          merged.push({
+            id: `l-${key}-${l.fechaVencimiento}`,
+            nombre: l.producto,
+            categoria: l.tipo,
+            tipo: l.tipo,
+            precioCliente: 0,
+            cantidad: l.cantidad,
+            fechaVencimiento: l.vencimientoFinal || l.fechaVencimiento,
+            imagen: l.linkImagen,
+            fuente: 'lote',
+          })
+          seen.add(key)
+        }
+      }
+      setProductos(merged)
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  const showToast = (msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2500)
+  }
+
+  const handleDelete = async (p: ProductoUnificado) => {
+    if (!confirm(`¿Eliminar "${p.nombre}"?`)) return
+    if (p.fuente === 'lote') {
+      const result = await eliminarLote(p.nombre, p.fechaVencimiento, p.cantidad)
+      if (result.success) {
+        showToast('Producto eliminado ✔')
+        setProductos((prev) => prev.filter((x) => x.id !== p.id))
+      }
+    } else {
+      setProductos((prev) => prev.filter((x) => x.id !== p.id))
+      showToast('Producto removido de la lista ✔')
+    }
+  }
+
+  const startEdit = (idx: number, p: ProductoUnificado) => {
+    setEditIdx(idx)
+    setEditForm({ precioCliente: p.precioCliente, cantidad: p.cantidad })
+  }
+
+  const saveEdit = async (p: ProductoUnificado) => {
+    if (p.fuente === 'lote') {
+      if (editForm.cantidad <= 0) {
+        const result = await eliminarLote(p.nombre, p.fechaVencimiento)
+        if (result.success) {
+          showToast('Producto eliminado ✔')
+          setProductos((prev) => prev.filter((x) => x.id !== p.id))
+        }
+      } else {
+        const result = await actualizarCantidadLote(p.nombre, p.fechaVencimiento, editForm.cantidad)
+        if (result.success) {
+          showToast('Cantidad actualizada ✔')
+          setProductos((prev) => prev.map((x) => x.id === p.id ? { ...x, cantidad: editForm.cantidad } : x))
+        }
+      }
+    } else {
+      setProductos((prev) => prev.map((x) => x.id === p.id ? { ...x, precioCliente: editForm.precioCliente, cantidad: editForm.cantidad } : x))
+      showToast('Producto actualizado ✔')
+    }
+    setEditIdx(null)
+  }
+
+  const filtered = productos.filter((p) =>
+    p.nombre.toLowerCase().includes(search.toLowerCase()) ||
+    p.tipo.toLowerCase().includes(search.toLowerCase())
+  )
+
+  if (loading) {
+    return (
+      <div className="card text-center py-12">
+        <Loader2 className="w-10 h-10 text-rosa-intenso animate-spin mx-auto" />
+        <p className="mt-3 text-gray-500">Cargando productos...</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="card">
+        <h2 className="text-2xl font-bold flex items-center gap-2 mb-4">
+          <List className="w-7 h-7 text-rosa-intenso" />
+          Todos los Productos ({productos.length})
+        </h2>
+        <input
+          type="text"
+          placeholder="Buscar por nombre o tipo..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="input-field mb-4"
+        />
+        <div className="space-y-2">
+          {filtered.map((p, idx) => (
+            <div key={p.id} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200">
+              <div className="flex-1 min-w-0">
+                <p className="font-bold truncate">{p.nombre}</p>
+                <p className="text-sm text-gray-500">{p.tipo} {p.fechaVencimiento && `• Vence: ${p.fechaVencimiento}`}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {editIdx === idx ? (
+                  <>
+                    <input
+                      type="number"
+                      value={editForm.precioCliente}
+                      onChange={(e) => setEditForm((f) => ({ ...f, precioCliente: Number(e.target.value) }))}
+                      className="w-20 text-right border rounded p-1 text-sm"
+                      placeholder="Precio"
+                    />
+                    <input
+                      type="number"
+                      value={editForm.cantidad}
+                      onChange={(e) => setEditForm((f) => ({ ...f, cantidad: Number(e.target.value) }))}
+                      className="w-16 text-right border rounded p-1 text-sm"
+                      placeholder="Cant."
+                    />
+                    <button onClick={() => saveEdit(p)} className="p-1 text-exito hover:bg-green-100 rounded">
+                      <CheckCircle className="w-5 h-5" />
+                    </button>
+                    <button onClick={() => setEditIdx(null)} className="p-1 text-error hover:bg-red-100 rounded">
+                      <AlertTriangle className="w-5 h-5" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-sm font-mono text-rosa-intenso">
+                      {p.precioCliente > 0 ? `$${p.precioCliente.toLocaleString('es-CL')}` : '-'}
+                    </span>
+                    <span className="text-sm font-mono">
+                      {p.cantidad > 0 ? `Cant: ${p.cantidad}` : ''}
+                    </span>
+                    <button onClick={() => startEdit(idx, p)} className="p-1 text-lavanda hover:bg-purple-100 rounded">
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleDelete(p)} className="p-1 text-error hover:bg-red-100 rounded">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {toast && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-full shadow-lg z-50 font-semibold flex items-center gap-2">
+          <CheckCircle className="w-5 h-5" />{toast}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function AdminPage() {
@@ -73,34 +313,24 @@ export default function AdminPage() {
           <FileText className="w-5 h-5" />
           Por Factura
         </button>
+        <button
+          onClick={() => setActiveTab('todos')}
+          className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg font-semibold transition-all ${
+            activeTab === 'todos'
+              ? 'bg-rosa-intenso text-white shadow-md'
+              : 'text-carbon hover:bg-lavanda/20'
+          }`}
+        >
+          <List className="w-5 h-5" />
+          Todos
+        </button>
       </div>
 
       {activeTab === 'individual' && <FormularioIndividual />}
       {activeTab === 'factura' && <FormularioFactura />}
+      {activeTab === 'todos' && <ListaTodos />}
     </div>
   )
-}
-
-const TIPOS_PRODUCTO = [
-  'Lácteos', 'Carnes', 'Embutidos', 'Panes', 'Bebidas',
-  'Snacks', 'Aseo', 'Verduras', 'Frutas', 'Enlatados',
-  'Congelados', 'Endulzantes', 'Aceites', 'Harinas', 'Especias', 'Otro',
-]
-
-const DIAS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'))
-const MESES = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
-const ANIOS = Array.from({ length: 12 }, (_, i) => String(new Date().getFullYear() + i))
-
-function calcTotals(precio: number, cantidad: number, mode: PriceMode) {
-  if (mode === 'neto') {
-    const neto = precio * cantidad
-    const iva = Math.round(neto * 0.19)
-    return { neto, iva, total: neto + iva, netoUnitario: precio }
-  }
-  const total = precio * cantidad
-  const neto = Math.round(total / 1.19)
-  const iva = total - neto
-  return { neto, iva, total, netoUnitario: neto / cantidad }
 }
 
 function FormularioIndividual() {
@@ -577,16 +807,10 @@ function FormularioFactura() {
 
   return (
     <div className="card space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold flex items-center gap-2">
-          <FileText className="w-7 h-7 text-rosa-intenso" />
-          Ingreso por Factura
-        </h2>
-        <button type="button" onClick={() => window.print()} className="btn-secondary flex items-center gap-2 print:hidden">
-          <Printer className="w-5 h-5" />
-          Imprimir
-        </button>
-      </div>
+      <h2 className="text-2xl font-bold flex items-center gap-2">
+        <FileText className="w-7 h-7 text-rosa-intenso" />
+        Ingreso por Factura
+      </h2>
 
       {status === 'success' && (
         <div className="p-4 bg-green-100 border border-exito rounded-xl flex items-center gap-2">
